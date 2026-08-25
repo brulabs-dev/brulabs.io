@@ -1,0 +1,119 @@
+.privacy-header {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.privacy-back {
+  color: var(--ink-soft);
+  font-size: .86rem;
+  font-weight: 700;
+}
+
+.privacy-main {
+  padding-block: clamp(80px, 11vw, 150px);
+}
+
+.privacy-title {
+  max-width: 980px;
+  padding-bottom: 72px;
+  border-bottom: 1px solid var(--line);
+}
+
+.privacy-title > span {
+  display: block;
+  margin-bottom: 24px;
+  color: var(--orange-dark);
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.privacy-title h1 {
+  max-width: 930px;
+  margin: 0 0 26px;
+  font-family: "Cabinet Grotesk", "Helvetica Neue", Arial, sans-serif;
+  font-size: clamp(3rem, 6vw, 6.4rem);
+  font-weight: 600;
+  line-height: .9;
+  letter-spacing: -.06em;
+}
+
+.privacy-title p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: .86rem;
+}
+
+.privacy-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, .55fr) minmax(0, 1.45fr);
+  gap: clamp(46px, 9vw, 150px);
+  padding-top: 72px;
+}
+
+.privacy-layout aside {
+  align-self: start;
+  position: sticky;
+  top: 30px;
+  padding-top: 18px;
+  border-top: 3px solid var(--orange);
+}
+
+.privacy-layout aside p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.privacy-content {
+  max-width: 760px;
+}
+
+.privacy-content section {
+  padding: 0 0 42px;
+  margin-bottom: 42px;
+  border-bottom: 1px solid var(--line);
+}
+
+.privacy-content h2 {
+  margin: 0 0 18px;
+  font-size: clamp(1.55rem, 2.4vw, 2.25rem);
+  line-height: 1.05;
+}
+
+.privacy-content p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.privacy-content a:not(.button) {
+  color: var(--orange-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.privacy-button {
+  margin-top: 28px;
+}
+
+.privacy-content .privacy-note {
+  color: var(--ink-soft);
+  font-size: .82rem;
+}
+
+.privacy-footer {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .privacy-main { padding-block: 72px 96px; }
+  .privacy-title { padding-bottom: 52px; }
+  .privacy-layout { grid-template-columns: 1fr; padding-top: 52px; }
+  .privacy-layout aside { position: static; }
+  .privacy-content section { padding-bottom: 34px; margin-bottom: 34px; }
+  .privacy-button { width: 100%; }
+}
