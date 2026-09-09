@@ -49,7 +49,7 @@ function Header() {
         {links.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
       </nav>
       <a className="button button-small desktop-cta" href={tallyUrl({ page: "home", cta: "header" })}>
-        Conte seu desafio <ArrowMark />
+        Conversar sobre o projeto <ArrowMark />
       </a>
       <button
         className="menu-button"
@@ -65,7 +65,7 @@ function Header() {
         <nav className="mobile-nav" id="mobile-nav" aria-label="Navegação móvel">
           {links.map(([label, href]) => <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>)}
           <a className="button" href={tallyUrl({ page: "home", cta: "header-mobile" })}>
-            Conte seu desafio <ArrowMark />
+            Conversar sobre o projeto <ArrowMark />
           </a>
         </nav>
       )}
@@ -94,7 +94,7 @@ function MpnProductScene() {
             </aside>
             <div className="dashboard-main">
               <div className="dashboard-heading">
-                <div><small>Seu acompanhamento</small><strong>Olá, Bruno</strong></div>
+                <div><small>Seu acompanhamento</small><strong>Olá, Ana</strong></div>
                 <span>Esta semana</span>
               </div>
               <div className="dashboard-grid">
@@ -158,14 +158,14 @@ function Hero() {
           <div className="hero-grid-lines" aria-hidden="true" />
           <div className="hero-scene-copy">
             <h1 id="hero-title">
-              Do problema real à <em>solução funcionando.</em>
+              A operação precisa funcionar. <em>A ferramenta vem depois.</em>
             </h1>
             <p>
-              A BruLabs cria produtos digitais, sistemas internos, integrações e automações a partir da rotina do negócio.
+              Produtos digitais, sistemas internos e automações. A BruLabs começa pelo contexto e só então decide se o caminho é usar, integrar ou construir.
             </p>
             <div className="hero-actions">
-              <a className="button button-light" href={tallyUrl({ page: "home", cta: "hero" })}>Conte seu desafio <ArrowMark /></a>
-              <a className="hero-text-link" href="#trabalho">Ver um projeto real <ArrowRight size={17} weight="bold" /></a>
+              <a className="button button-light" href={tallyUrl({ page: "home", cta: "hero" })}>Conversar sobre o projeto <ArrowMark /></a>
+              <a className="hero-text-link" href="#trabalho">Ver um projeto <ArrowRight size={17} weight="bold" /></a>
             </div>
           </div>
 
@@ -184,15 +184,15 @@ function SelectedWork() {
   return (
     <section className="selected-work" id="trabalho" aria-labelledby="mpn-title">
       <div className="section-shell selected-work-inner">
-        <h2>Trabalho selecionado</h2>
+        <h2>Um projeto em operação</h2>
         <article className="selected-project">
           <div className="selected-project-visual"><MpnProductScene /></div>
           <div className="selected-project-copy">
             <div><span>Produto digital · saúde</span><h3 id="mpn-title">Manda Pra Nutri</h3></div>
             <div>
-              <p>Acompanhamento nutricional dentro da conversa, com registros organizados em um painel próprio.</p>
-              <p>Começou no ChatGPT, foi testado no Telegram e chegou ao WhatsApp com a BruLabs conduzindo produto, experiência e implementação.</p>
-              <a href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver produto em operação <ArrowMark external /></a>
+              <p>Acompanhamento nutricional pelo WhatsApp, com o histórico organizado num painel para a nutricionista.</p>
+              <p>Saiu de um experimento no ChatGPT, passou pelo Telegram e chegou ao WhatsApp. A BruLabs levou produto, experiência e implementação até o uso.</p>
+              <a href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver o produto <ArrowMark external /></a>
             </div>
           </div>
         </article>
@@ -205,7 +205,7 @@ const capabilities = [
   {
     number: "01",
     title: "Produtos digitais",
-    description: "Plataformas web, produtos com IA e primeiras versões funcionais para clientes, parceiros ou mercado.",
+    description: "Plataformas web, produtos com IA e primeiras versões que um cliente, parceiro ou mercado já consegue usar.",
     examples: "estratégia · protótipo · desenvolvimento · lançamento",
     image: "assets/solutions/digital-product-cinema-v2.webp",
     path: "product" as const,
@@ -213,7 +213,7 @@ const capabilities = [
   {
     number: "02",
     title: "Sistemas internos",
-    description: "Painéis, backoffices, ferramentas administrativas e portais desenhados para a rotina real da equipe.",
+    description: "Painéis, backoffices e portais para quando planilha e ferramenta genérica já não dão conta do processo.",
     examples: "operação · dados · permissões · acompanhamento",
     image: "assets/solutions/custom-system-v2.webp",
     path: "process" as const,
@@ -221,7 +221,7 @@ const capabilities = [
   {
     number: "03",
     title: "Integrações e automações",
-    description: "Fluxos entre formulários, planilhas, e-mail, CRM e Microsoft 365 para reduzir tarefas manuais.",
+    description: "Ligar formulários, planilhas, e-mail, CRM e Microsoft 365 para parar de copiar dado de um lado para o outro.",
     examples: "integrações · automação · IA aplicada · suporte",
     image: "assets/solutions/automation-v2.webp",
     path: "process" as const,
@@ -258,7 +258,7 @@ function ServicePanel({
                 href={tallyUrl({ path: capability.path, solution: capability.title, page: "home", cta: "servico" })}
                 tabIndex={-1}
               >
-                Conversar sobre esse serviço <ArrowMark />
+                Ver se faz sentido <ArrowMark />
               </a>
             </div>
             <figure><img src={asset(capability.image)} alt="" loading="lazy" /></figure>
@@ -348,7 +348,7 @@ function Capabilities() {
     <section className="services-section section-shell" id="servicos" aria-labelledby="services-title">
       <div className="cuberto-heading">
         <span>O que fazemos</span>
-        <div><h2 id="services-title">Soluções definidas pelo problema, não pela ferramenta.</h2><p>Entendemos a operação antes de decidir se o caminho é usar, integrar ou construir.</p></div>
+        <div><h2 id="services-title">Primeiro o problema. Depois a ferramenta.</h2><p>Antes de propor stack, a gente mapeia a operação, o que já foi tentado e quem usa o processo.</p></div>
       </div>
       <div className="service-panels-stage" ref={stageRef}>
         <div className="service-panels">
@@ -370,22 +370,22 @@ const processSteps = [
   {
     number: "01",
     title: "Entender",
-    subtitle: "Contexto antes da ferramenta",
-    description: "Mapeamos a necessidade, a operação atual, quem participa e o que já foi tentado.",
+    subtitle: "O que existe e o que falta",
+    description: "Levantamos a necessidade, o processo atual, quem participa e o que já foi tentado.",
     image: "assets/art/method/diagnosis.webp",
   },
   {
     number: "02",
     title: "Escolher",
-    subtitle: "Direção antes do escopo",
-    description: "Comparamos soluções prontas, integrações e desenvolvimento sob medida antes de propor o caminho.",
+    subtitle: "Usar, integrar ou construir",
+    description: "Comparamos ferramenta pronta, integração e desenvolvimento sob medida antes de fechar o caminho.",
     image: "assets/art/method/direction.webp",
   },
   {
     number: "03",
     title: "Colocar em uso",
-    subtitle: "Entrega antes da apresentação",
-    description: "Desenvolvemos, testamos e acompanhamos a entrada da solução na rotina da operação.",
+    subtitle: "Testar e colocar na rotina",
+    description: "Desenvolvemos, testamos e acompanhamos a entrada da solução no dia a dia da equipe.",
     image: "assets/art/method/construction.webp",
   },
 ];
@@ -394,7 +394,7 @@ function Process() {
   return (
     <section className="workflow-section" id="processo" aria-labelledby="process-title">
       <div className="section-shell workflow-inner">
-        <div className="workflow-heading"><h2 id="process-title">Como trabalhamos</h2><p>Clareza antes da tecnologia. Cada etapa reduz incerteza e aproxima a solução da rotina real.</p></div>
+        <div className="workflow-heading"><h2 id="process-title">Como trabalhamos</h2><p>Três etapas, nesta ordem: entender o contexto, escolher o caminho e colocar em uso.</p></div>
         <div className="workflow-grid">
           {processSteps.map((step) => (
             <article className="workflow-card" key={step.number}>
@@ -411,12 +411,12 @@ function Process() {
 function Founder() {
   return (
     <section className="about-section section-shell" id="sobre" aria-labelledby="founder-title">
-      <div className="cuberto-heading about-heading"><span>Quem conduz</span><div><h2 id="founder-title">Proximidade técnica do começo ao uso.</h2><p>O projeto não passa por uma cadeia de atendimento. Bruno participa diretamente das decisões e da implementação.</p></div></div>
+      <div className="cuberto-heading about-heading"><span>Sobre</span><div><h2 id="founder-title">Quem faz o diagnóstico também implementa.</h2><p>Não tem fila de atendimento no meio. O Bruno acompanha da primeira conversa até o que entra em uso.</p></div></div>
       <div className="about-grid">
         <figure className="about-photo"><img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, fundador da BruLabs" loading="lazy" /></figure>
-        <article className="about-card about-card-main"><span>Fundador da BruLabs</span><h3>Bruno conduz o caminho técnico junto com quem conhece a operação.</h3></article>
+        <article className="about-card about-card-main"><span>Fundador</span><h3>Trabalho direto com quem conhece o processo.</h3></article>
         <article className="about-card"><span>Formação</span><strong>Engenharia · UFRGS<br />Especialização em IA<br />MBA · USP/Esalq</strong></article>
-        <article className="about-card about-card-wide"><span>Forma de atuação</span><strong>Investigação, definição de prioridades, implementação e acompanhamento.</strong></article>
+        <article className="about-card about-card-wide"><span>Como atua</span><strong>Investigar, priorizar, implementar e acompanhar.</strong></article>
       </div>
     </section>
   );
@@ -431,8 +431,8 @@ function Training() {
           <span>Também fazemos</span>
           <h2 id="training-title">Treinamentos de IA e automação</h2>
         </div>
-        <p>Conteúdo prático, adaptado às situações e ferramentas que a equipe já usa.</p>
-        <span className="training-strip-cta">Conhecer <ArrowMark /></span>
+        <p>Workshop prático, nas ferramentas e situações que a equipe já usa.</p>
+        <span className="training-strip-cta">Ver treinamentos <ArrowMark /></span>
       </a>
     </section>
   );
@@ -442,10 +442,10 @@ function FinalCta() {
   return (
     <section className="final-cta">
       <Reveal className="section-shell final-cta-inner">
-        <span>Próximo projeto</span>
-        <h2>Conte o que está travando. A tecnologia vem depois.</h2>
+        <span>Contato</span>
+        <h2>Se algo na operação está travado, começa por aí.</h2>
         <a className="button button-dark" href={tallyUrl({ page: "home", cta: "final" })}>
-          Conte seu desafio <ArrowMark />
+          Conversar sobre o projeto <ArrowMark />
         </a>
       </Reveal>
     </section>
