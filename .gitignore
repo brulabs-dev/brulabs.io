@@ -68,6 +68,7 @@ public/assets/*
 public/assets/brand/*
 !public/assets/brand/logo-principal.png
 !public/assets/brand/icone-principal.png
+!public/assets/brand/bruno-founder-paper-composite-v6.webp
 
 public/assets/fonts/*
 !public/assets/fonts/CabinetGrotesk-Variable.woff2
@@ -75,6 +76,10 @@ public/assets/fonts/*
 !public/assets/fonts/Satoshi-VariableItalic.woff2
 
 !public/assets/art/**
+
+!public/assets/case/
+!public/assets/case/mpn/
+!public/assets/case/mpn/meal-capture.webp
 
 public/assets/solutions/*
 !public/assets/solutions/automation-v2.webp
