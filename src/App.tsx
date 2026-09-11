@@ -456,7 +456,7 @@ function Footer() {
   return (
     <footer className="footer section-shell">
       <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><a href="#trabalho">Trabalho</a><a href="#servicos">Serviços</a><a href={sitePath("privacidade/")}>Privacidade</a></div>
+      <div><a href="#trabalho">Trabalho</a><a href="#servicos">Serviços</a><a href={sitePath("scada-automacao/")}>SCADA e automação elétrica</a><a href={sitePath("privacidade/")}>Privacidade</a></div>
       <span>© 2026 BruLabs</span>
     </footer>
   );
@@ -474,6 +474,10 @@ export function App() {
         <Process />
         <Founder />
         <Training />
+        <section className="scada-home-link section-shell" aria-labelledby="scada-home-title">
+          <div><span>Automação elétrica</span><h2 id="scada-home-title">SCADA e comunicação de equipamentos</h2><p>Telas, configuração de pontos e parametrização de comunicação de religadores e relés. Apoio técnico para integradoras e empresas de engenharia.</p></div>
+          <a className="button button-dark" href={sitePath("scada-automacao/")}>Conhecer os serviços <ArrowMark /></a>
+        </section>
         <FinalCta />
       </main>
       <Footer />

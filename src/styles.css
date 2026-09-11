@@ -501,7 +501,7 @@ a:hover .arrow-mark { background: rgb(29 33 31 / 16%); transform: translateX(3px
 
 .footer { display: grid; min-height: 140px; grid-template-columns: 1fr auto auto; align-items: center; gap: 34px; }
 .footer img { width: 132px; }
-.footer div { display: flex; gap: 25px; color: var(--ink-soft); font-size: .75rem; }
+.footer div { display: flex; flex-wrap: wrap; gap: 25px; color: var(--ink-soft); font-size: .75rem; }
 .footer div a:hover { color: var(--orange-dark); }
 .footer > span { color: var(--ink-soft); font-size: .72rem; white-space: nowrap; }
 
@@ -793,3 +793,11 @@ a:hover .arrow-mark { background: rgb(29 33 31 / 16%); transform: translateX(3px
 @media (prefers-reduced-motion: reduce) {
   .service-panel-collapse, .service-panel-body { transition-duration: 80ms; }
 }
+
+.scada-home-link { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding-block: 50px 70px; }
+.scada-home-link > div { max-width: 760px; }
+.scada-home-link span { font-size: .875rem; }
+.scada-home-link h2 { font-size: clamp(1.8rem, 3vw, 3rem); line-height: 1.15; margin: 15px 0; }
+.scada-home-link p { line-height: 1.65; margin-bottom: 0; }
+.scada-home-link > a { flex-shrink: 0; }
+@media (max-width: 900px) { .scada-home-link { flex-direction: column; align-items: flex-start; } }

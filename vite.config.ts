@@ -12,6 +12,7 @@ export default defineConfig({
         home: "index.html",
         trainings: "treinamentos/index.html",
         privacy: "privacidade/index.html",
+        scada: "scada-automacao/index.html",
       },
     },
   },
