@@ -1,16 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUpRight } from "@phosphor-icons/react";
+import { useState } from "react";
+import { ArrowRight, LinkedinLogo, WhatsappLogo } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const EMAIL = "bruno@brulabs.io";
 
+// TODO: placeholders. Replace both with the real values before publishing.
+const WHATSAPP_NUMBER = "5548900000000";
+const LINKEDIN_URL = "https://www.linkedin.com/in/SEU-PERFIL";
+const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Oi, Bruno! Vim pelo site da BruLabs.")}`;
+
 const navLinks = [
   ["Onde a IA entra", "#onde"],
-  ["Como eu faço", "#metodo"],
-  ["Prova", "#prova"],
-  ["Treinamentos", "#treinamentos"],
   ["Sobre", "#sobre"],
+  ["Como eu faço", "#metodo"],
+  ["Treinamentos", "#treinamentos"],
 ];
 
 function Header() {
@@ -54,61 +58,46 @@ const places = [
   {
     title: "No atendimento",
     before: "Alguém responde as mesmas perguntas o dia inteiro.",
-    after: "As repetidas se respondem sozinhas, e o que é delicado chega numa pessoa.",
+    after: "A IA responde as perguntas repetidas e passa pra uma pessoa o que é delicado.",
     image: "phone",
   },
   {
     title: "Na papelada",
     before: "Contrato, nota e proposta lidos linha por linha.",
-    after: "O documento chega lido, com o que importa já separado.",
+    after: "A IA lê o documento e entrega um resumo com o que importa.",
     image: "archive",
   },
   {
     title: "Entre os sistemas",
     before: "Dado copiado de uma planilha pra outra, na mão.",
-    after: "O dado sai de um lugar e chega no outro sozinho.",
+    after: "O dado sai de um lugar e chega no outro sem ninguém copiar.",
     image: "process",
   },
   {
     title: "Na mão da equipe",
     before: "Cada um testa o ChatGPT do seu jeito, no chute.",
-    after: "A equipe usa com método, nas tarefas de verdade.",
+    after: "A equipe sabe em quais tarefas usar o ChatGPT e como pedir.",
     image: "typewriter",
   },
 ];
 
 function Places() {
   const [withAi, setWithAi] = useState(false);
-  const gridRef = useRef<HTMLUListElement>(null);
-
-  // Flip from "today" to "with AI" once, the first time the cards are on screen.
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid || !("IntersectionObserver" in window)) return;
-    let timer = 0;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      timer = window.setTimeout(() => setWithAi(true), 1100);
-    }, { threshold: 0.6 });
-    observer.observe(grid);
-    return () => { observer.disconnect(); window.clearTimeout(timer); };
-  }, []);
 
   return (
     <section className="places section-shell" id="onde" aria-labelledby="places-title">
       <div className="places-top">
         <div className="section-heading">
           <span>Onde a IA entra</span>
-          <h2 id="places-title">Ela quase nunca entra onde o hype diz.</h2>
-          <p>Entra no trabalho chato que a sua equipe repete toda semana. Quatro lugares onde costuma caber:</p>
+          <h2 id="places-title">No trabalho chato que a equipe repete toda semana.</h2>
+          <p>Quatro lugares onde ela costuma caber. Troque a chave para ver a diferença.</p>
         </div>
-        <div className="switch" role="group" aria-label="Comparar o trabalho hoje e com IA">
+        <div className="switch" role="group" aria-label="Mostrar o trabalho hoje ou com IA">
           <button type="button" aria-pressed={!withAi} onClick={() => setWithAi(false)}>Hoje</button>
           <button type="button" aria-pressed={withAi} onClick={() => setWithAi(true)}>Com IA</button>
         </div>
       </div>
-      <ul className={`places-grid${withAi ? " is-ai" : ""}`} ref={gridRef}>
+      <ul className={`places-grid${withAi ? " is-ai" : ""}`}>
         {places.map((place) => (
           <li key={place.title}>
             <figure aria-hidden="true">
@@ -116,7 +105,8 @@ function Places() {
               <img className="place-new" src={asset(`assets/art/hero/${place.image}-modern.webp`)} alt="" loading="lazy" />
             </figure>
             <h3>{place.title}</h3>
-            <p aria-live="polite"><b>{withAi ? "Com IA" : "Hoje"}</b>{withAi ? place.after : place.before}</p>
+            <p className="place-before"><b>Hoje</b>{place.before}</p>
+            <p className="place-after"><b>Com IA</b>{place.after}</p>
           </li>
         ))}
       </ul>
@@ -179,33 +169,9 @@ function Method() {
             </li>
           ))}
         </ol>
-      </div>
-    </section>
-  );
-}
-
-function Proof() {
-  return (
-    <section className="proof" id="prova" aria-labelledby="proof-title">
-      <div className="section-shell proof-inner">
-        <div className="proof-copy">
-          <span>Prova</span>
-          <h2 id="proof-title">Não é teoria. Tenho um produto de IA no ar.</h2>
-          <h3>Manda Pra Nutri</h3>
-          <p>
-            O paciente manda foto, áudio ou texto da refeição pelo WhatsApp. A IA analisa e registra, e a nutricionista acompanha o histórico num painel.
-          </p>
-          <p>
-            Começou como um experimento no ChatGPT, passou pelo Telegram e hoje roda no WhatsApp.
-          </p>
-          <a className="text-link" href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">
-            mandapranutri.com.br <ArrowUpRight size={16} weight="bold" aria-hidden="true" />
-          </a>
-        </div>
-        <div className="proof-art" aria-hidden="true">
-          <img className="proof-photo" src={asset("assets/case/mpn/meal-capture.webp")} alt="" width={819} height={1229} loading="lazy" />
-          <div className="proof-bubble">Refeição recebida. Já organizei a análise e o registro no seu diário.</div>
-          <div className="proof-tag">foto · áudio · texto</div>
+        <div className="method-cta">
+          <p>Quer saber por onde começar na sua empresa?</p>
+          <a className="button" href="#contato">Falar com o Bruno <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
         </div>
       </div>
     </section>
@@ -219,7 +185,7 @@ function Training() {
     <section className="training section-shell" id="treinamentos" aria-labelledby="training-title">
       <img src={asset("assets/art/training/teacher.webp")} alt="" width={1024} height={1536} loading="lazy" />
       <div className="training-copy">
-        <span>Também faço</span>
+        <span>Treinamentos</span>
         <h2 id="training-title">Treinamento de IA pra equipes</h2>
         <p>
           Encontro prático e remoto, montado em cima das tarefas e das ferramentas que a equipe já usa. Ninguém sai com mais uma palestra sobre o futuro.
@@ -249,7 +215,11 @@ function About() {
           <p>
             Gosto de entender como as coisas funcionam antes de mexer nelas, e é assim que trabalho com IA também.
           </p>
-          <small>Engenharia pela UFRGS · Especialização em IA · MBA pela USP/Esalq</small>
+          <ul className="about-facts">
+            <li>Engenharia pela UFRGS</li>
+            <li>Especialização em IA</li>
+            <li>MBA pela USP/Esalq</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -262,9 +232,14 @@ function Contact() {
       <div className="contact-scene">
         <div className="rings" aria-hidden="true" />
         <h2 id="contact-title">Me conta onde está travando.</h2>
-        <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+        <div className="contact-actions">
+          <a className="button button-light" href={whatsappUrl} target="_blank" rel="noreferrer">
+            <WhatsappLogo size={20} weight="fill" aria-hidden="true" /> Chamar no WhatsApp
+          </a>
+          <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+        </div>
         <p>
-          Ou <a href={tallyUrl({ page: "home", cta: "contato" })}>preencha o formulário</a>, se preferir.
+          Também estou no <a href={LINKEDIN_URL} target="_blank" rel="noreferrer">LinkedIn</a>. Se preferir, <a href={tallyUrl({ page: "home", cta: "contato" })}>preencha o formulário</a>.
         </p>
       </div>
     </section>
@@ -275,7 +250,7 @@ function Footer() {
   return (
     <footer className="footer section-shell">
       <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><span>Florianópolis, SC</span><a href={`mailto:${EMAIL}`}>{EMAIL}</a><a href={asset("privacidade/")}>Privacidade</a></div>
+      <div><span>Florianópolis, SC</span><a href={`mailto:${EMAIL}`}>{EMAIL}</a><a href={LINKEDIN_URL} target="_blank" rel="noreferrer" aria-label="LinkedIn do Bruno"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /></a><a href={asset("privacidade/")}>Privacidade</a></div>
       <span>© 2026 BruLabs</span>
     </footer>
   );
@@ -289,10 +264,9 @@ export function App() {
       <main id="conteudo">
         <Hero />
         <Places />
-        <Method />
-        <Proof />
-        <Training />
         <About />
+        <Method />
+        <Training />
         <Contact />
       </main>
       <Footer />
