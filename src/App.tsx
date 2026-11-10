@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ArrowUpRight } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
@@ -6,7 +7,7 @@ const EMAIL = "bruno@brulabs.io";
 
 const navLinks = [
   ["Onde a IA entra", "#onde"],
-  ["Como eu faço", "#como"],
+  ["Como eu faço", "#metodo"],
   ["Prova", "#prova"],
   ["Treinamentos", "#treinamentos"],
   ["Sobre", "#sobre"],
@@ -52,39 +53,73 @@ function Hero() {
 const places = [
   {
     title: "No atendimento",
-    description: "Responder as perguntas que se repetem, no WhatsApp ou no e-mail, e passar pra uma pessoa quando precisa.",
+    before: "Alguém responde as mesmas perguntas o dia inteiro.",
+    after: "As repetidas se respondem sozinhas, e o que é delicado chega numa pessoa.",
+    image: "phone",
   },
   {
     title: "Na papelada",
-    description: "Ler contrato, nota, proposta e planilha, e devolver o que importa já resumido.",
+    before: "Contrato, nota e proposta lidos linha por linha.",
+    after: "O documento chega lido, com o que importa já separado.",
+    image: "archive",
   },
   {
     title: "Entre os sistemas",
-    description: "Acabar com o copia-e-cola: o dado sai de um lugar e chega no outro sozinho.",
+    before: "Dado copiado de uma planilha pra outra, na mão.",
+    after: "O dado sai de um lugar e chega no outro sozinho.",
+    image: "process",
   },
   {
     title: "Na mão da equipe",
-    description: "Gente usando ChatGPT, Claude ou Copilot com método, e não no chute.",
+    before: "Cada um testa o ChatGPT do seu jeito, no chute.",
+    after: "A equipe usa com método, nas tarefas de verdade.",
+    image: "typewriter",
   },
 ];
 
 function Places() {
+  const [withAi, setWithAi] = useState(false);
+  const gridRef = useRef<HTMLUListElement>(null);
+
+  // Flip from "today" to "with AI" once, the first time the cards are on screen.
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || !("IntersectionObserver" in window)) return;
+    let timer = 0;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      timer = window.setTimeout(() => setWithAi(true), 1100);
+    }, { threshold: 0.6 });
+    observer.observe(grid);
+    return () => { observer.disconnect(); window.clearTimeout(timer); };
+  }, []);
+
   return (
     <section className="places section-shell" id="onde" aria-labelledby="places-title">
-      <div className="section-heading">
-        <span>Onde a IA entra</span>
-        <h2 id="places-title">Ela quase nunca entra onde o hype diz.</h2>
-        <p>Entra no trabalho chato que a sua equipe repete toda semana. Quatro lugares onde costuma caber:</p>
+      <div className="places-top">
+        <div className="section-heading">
+          <span>Onde a IA entra</span>
+          <h2 id="places-title">Ela quase nunca entra onde o hype diz.</h2>
+          <p>Entra no trabalho chato que a sua equipe repete toda semana. Quatro lugares onde costuma caber:</p>
+        </div>
+        <div className="switch" role="group" aria-label="Comparar o trabalho hoje e com IA">
+          <button type="button" aria-pressed={!withAi} onClick={() => setWithAi(false)}>Hoje</button>
+          <button type="button" aria-pressed={withAi} onClick={() => setWithAi(true)}>Com IA</button>
+        </div>
       </div>
-      <ol className="places-list">
-        {places.map((place, index) => (
+      <ul className={`places-grid${withAi ? " is-ai" : ""}`} ref={gridRef}>
+        {places.map((place) => (
           <li key={place.title}>
-            <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+            <figure aria-hidden="true">
+              <img className="place-old" src={asset(`assets/art/hero/${place.image}-old.webp`)} alt="" loading="lazy" />
+              <img className="place-new" src={asset(`assets/art/hero/${place.image}-modern.webp`)} alt="" loading="lazy" />
+            </figure>
             <h3>{place.title}</h3>
-            <p>{place.description}</p>
+            <p aria-live="polite"><b>{withAi ? "Com IA" : "Hoje"}</b>{withAi ? place.after : place.before}</p>
           </li>
         ))}
-      </ol>
+      </ul>
       <p className="places-note">E se não couber em lugar nenhum, eu digo.</p>
     </section>
   );
@@ -92,40 +127,55 @@ function Places() {
 
 const steps = [
   {
-    title: "Olho",
-    subtitle: "Como o trabalho é feito hoje",
-    description: "Antes de falar em ferramenta, entendo a rotina: quem faz o quê, onde trava e o que já foi tentado.",
+    title: "Diagnóstico",
+    description: "Converso com quem faz o trabalho e mapeio a rotina: quem faz o quê, onde trava e o que já foi tentado.",
+    output: "O processo desenhado como ele é hoje.",
     image: "assets/art/method/diagnosis.webp",
   },
   {
-    title: "Escolho",
-    subtitle: "Onde vale e onde não vale",
+    title: "Pesquisa",
+    description: "Antes de construir qualquer coisa, levanto o que já existe pronto para o seu caso.",
+    output: "As opções na mesa, com o limite de cada uma.",
+    image: "assets/art/method/research.webp",
+  },
+  {
+    title: "Direção",
     description: "Digo onde a IA resolve, onde uma ferramenta pronta já basta e onde é melhor não mexer.",
+    output: "Uma recomendação clara, inclusive quando ela é “não faça”.",
     image: "assets/art/method/direction.webp",
   },
   {
-    title: "Deixo rodando",
-    subtitle: "Montar, testar, ensinar",
+    title: "Proposta",
+    description: "Escopo, prazo e preço combinados antes de começar.",
+    output: "Uma proposta que diz exatamente o que você vai receber.",
+    image: "assets/art/method/proposal.webp",
+  },
+  {
+    title: "Construção",
     description: "Monto, testo com quem vai usar e treino a equipe. Só saio quando está na rotina.",
+    output: "A solução em uso e a equipe sabendo operar.",
     image: "assets/art/method/construction.webp",
   },
 ];
 
 function Method() {
   return (
-    <section className="method" id="como" aria-labelledby="method-title">
+    <section className="method" id="metodo" aria-labelledby="method-title">
       <div className="section-shell">
         <div className="method-heading">
           <h2 id="method-title">Como eu faço</h2>
-          <p>Uma pessoa só, do começo ao fim. Quem conversa com você é quem monta.</p>
+          <p>Cinco etapas, nessa ordem. Cada uma termina com algo na sua mão.</p>
         </div>
-        <ol className="method-grid">
+        <ol className="method-stack">
           {steps.map((step, index) => (
-            <li key={step.title}>
+            <li key={step.title} style={{ "--i": index } as React.CSSProperties}>
+              <div className="method-copy">
+                <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+                <dl><dt>Você sai com</dt><dd>{step.output}</dd></dl>
+              </div>
               <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
-              <span>{String(index + 1).padStart(2, "0")} · {step.subtitle}</span>
-              <h3>{step.title}</h3>
-              <p>{step.description}</p>
             </li>
           ))}
         </ol>
@@ -136,14 +186,11 @@ function Method() {
 
 function Proof() {
   return (
-    <section className="proof section-shell" id="prova" aria-labelledby="proof-title">
-      <div className="section-heading">
-        <span>Prova</span>
-        <h2 id="proof-title">Não é teoria. Tenho um produto de IA no ar.</h2>
-      </div>
-      <article className="proof-card">
+    <section className="proof" id="prova" aria-labelledby="proof-title">
+      <div className="section-shell proof-inner">
         <div className="proof-copy">
-          <span>Produto próprio · saúde</span>
+          <span>Prova</span>
+          <h2 id="proof-title">Não é teoria. Tenho um produto de IA no ar.</h2>
           <h3>Manda Pra Nutri</h3>
           <p>
             O paciente manda foto, áudio ou texto da refeição pelo WhatsApp. A IA analisa e registra, e a nutricionista acompanha o histórico num painel.
@@ -155,8 +202,12 @@ function Proof() {
             mandapranutri.com.br <ArrowUpRight size={16} weight="bold" aria-hidden="true" />
           </a>
         </div>
-        <img src={asset("assets/art/case/mpn-statue.webp")} alt="" width={1024} height={1536} loading="lazy" />
-      </article>
+        <div className="proof-art" aria-hidden="true">
+          <img className="proof-photo" src={asset("assets/case/mpn/meal-capture.webp")} alt="" width={819} height={1229} loading="lazy" />
+          <div className="proof-bubble">Refeição recebida. Já organizei a análise e o registro no seu diário.</div>
+          <div className="proof-tag">foto · áudio · texto</div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -187,18 +238,19 @@ function Training() {
 function About() {
   return (
     <section className="about section-shell" id="sobre" aria-labelledby="about-title">
-      <img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, fundador da BruLabs" width={1254} height={1254} loading="lazy" />
-      <div>
-        <span>Sobre</span>
-        <h2 id="about-title">A BruLabs sou eu, o Bruno.</h2>
-        <p>
-          Engenheiro, em Florianópolis. Não tem equipe de vendas nem fila de atendimento: você fala direto com quem vai fazer o trabalho.
-        </p>
-        <dl>
-          <div><dt>Graduação</dt><dd>Engenharia, UFRGS</dd></div>
-          <div><dt>Especialização</dt><dd>Inteligência Artificial</dd></div>
-          <div><dt>MBA</dt><dd>USP/Esalq</dd></div>
-        </dl>
+      <div className="about-note">
+        <img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, da BruLabs" width={1254} height={1254} loading="lazy" />
+        <div>
+          <span>Quem está do outro lado</span>
+          <h2 id="about-title">Oi, eu sou o Bruno.</h2>
+          <p>
+            Sou engenheiro e moro em Florianópolis. A BruLabs é pequena de propósito: quem conversa com você no começo é quem faz o trabalho depois.
+          </p>
+          <p>
+            Gosto de entender como as coisas funcionam antes de mexer nelas, e é assim que trabalho com IA também.
+          </p>
+          <small>Engenharia pela UFRGS · Especialização em IA · MBA pela USP/Esalq</small>
+        </div>
       </div>
     </section>
   );
