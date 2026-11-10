@@ -13,7 +13,7 @@ const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
 const navLinks = [
   ["Onde a IA entra", "#onde"],
   ["Sobre", "#sobre"],
-  ["Como eu faço", "#metodo"],
+  ["Como eu trabalho", "#metodo"],
   ["Treinamentos", "#treinamentos"],
 ];
 
@@ -118,32 +118,27 @@ function Places() {
 const steps = [
   {
     title: "Diagnóstico",
-    description: "Converso com quem faz o trabalho e mapeio a rotina: quem faz o quê, onde trava e o que já foi tentado.",
-    output: "O processo desenhado como ele é hoje.",
+    description: "Converso com quem faz o trabalho pra entender a rotina e onde ela trava.",
     image: "assets/art/method/diagnosis.webp",
   },
   {
     title: "Pesquisa",
-    description: "Antes de construir qualquer coisa, levanto o que já existe pronto para o seu caso.",
-    output: "As opções na mesa, com o limite de cada uma.",
+    description: "Vejo o que já existe pronto antes de pensar em construir.",
     image: "assets/art/method/research.webp",
   },
   {
     title: "Direção",
-    description: "Digo onde a IA resolve, onde uma ferramenta pronta já basta e onde é melhor não mexer.",
-    output: "Uma recomendação clara, inclusive quando ela é “não faça”.",
+    description: "Digo onde a IA ajuda e onde é melhor não mexer.",
     image: "assets/art/method/direction.webp",
   },
   {
     title: "Proposta",
-    description: "Escopo, prazo e preço combinados antes de começar.",
-    output: "Uma proposta que diz exatamente o que você vai receber.",
+    description: "Combinamos escopo, prazo e preço antes de começar.",
     image: "assets/art/method/proposal.webp",
   },
   {
     title: "Construção",
-    description: "Monto, testo com quem vai usar e treino a equipe. Só saio quando está na rotina.",
-    output: "A solução em uso e a equipe sabendo operar.",
+    description: "Monto, testo com quem vai usar e treino a equipe.",
     image: "assets/art/method/construction.webp",
   },
 ];
@@ -153,19 +148,18 @@ function Method() {
     <section className="method" id="metodo" aria-labelledby="method-title">
       <div className="section-shell">
         <div className="method-heading">
-          <h2 id="method-title">Como eu faço</h2>
-          <p>Cinco etapas, nessa ordem. Cada uma termina com algo na sua mão.</p>
+          <h2 id="method-title">Como eu trabalho</h2>
+          <p>Cinco etapas, nessa ordem.</p>
         </div>
-        <ol className="method-stack">
+        <ol className="method-steps">
           {steps.map((step, index) => (
-            <li key={step.title} style={{ "--i": index } as React.CSSProperties}>
-              <div className="method-copy">
+            <li key={step.title}>
+              <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
+              <div>
                 <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                 <h3>{step.title}</h3>
                 <p>{step.description}</p>
-                <dl><dt>Você sai com</dt><dd>{step.output}</dd></dl>
               </div>
-              <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
             </li>
           ))}
         </ol>
