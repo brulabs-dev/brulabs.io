@@ -14,7 +14,6 @@ const navLinks = [
   ["Onde a IA entra", "#onde"],
   ["Sobre", "#sobre"],
   ["Como eu trabalho", "#metodo"],
-  ["Treinamentos", "#treinamentos"],
 ];
 
 function Header() {
@@ -41,7 +40,7 @@ function Hero() {
             Trago IA pra dentro da sua empresa. <em>E deixo funcionando.</em>
           </h1>
           <p>
-            Sou o Bruno, engenheiro. Sento com a sua equipe, acho onde a IA tira trabalho das costas de vocês, monto e ensino a usar.
+            Sou o Bruno, engenheiro. Vejo com a sua equipe onde a IA tira trabalho das costas de vocês e coloco pra rodar.
           </p>
           <div className="hero-actions">
             <a className="button button-light" href="#contato">Falar com o Bruno <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
@@ -117,79 +116,37 @@ function Places() {
 
 const steps = [
   {
-    title: "Diagnóstico",
-    description: "Converso com quem faz o trabalho pra entender a rotina e onde ela trava.",
-    image: "assets/art/method/diagnosis.webp",
+    title: "Vejo o trabalho de perto",
+    description: "Passo pela rotina com quem faz, tarefa por tarefa, pra achar o que se repete.",
   },
   {
-    title: "Pesquisa",
-    description: "Vejo o que já existe pronto antes de pensar em construir.",
-    image: "assets/art/method/research.webp",
+    title: "Testo pequeno",
+    description: "Antes de propor algo grande, testo a IA numa tarefa real da empresa.",
   },
   {
-    title: "Direção",
-    description: "Digo onde a IA ajuda e onde é melhor não mexer.",
-    image: "assets/art/method/direction.webp",
+    title: "Digo se vale",
+    description: "Mostro o que o teste deu e onde é melhor não mexer.",
   },
   {
-    title: "Proposta",
-    description: "Combinamos escopo, prazo e preço antes de começar.",
-    image: "assets/art/method/proposal.webp",
-  },
-  {
-    title: "Construção",
-    description: "Monto, testo com quem vai usar e treino a equipe.",
-    image: "assets/art/method/construction.webp",
+    title: "Coloco na rotina",
+    description: "Monto o que foi combinado e ajusto com quem vai usar.",
   },
 ];
 
 function Method() {
   return (
     <section className="method" id="metodo" aria-labelledby="method-title">
-      <div className="section-shell">
-        <div className="method-heading">
-          <h2 id="method-title">Como eu trabalho</h2>
-          <p>Cinco etapas, nessa ordem.</p>
-        </div>
+      <div className="section-shell method-inner">
+        <h2 id="method-title">Como eu trabalho</h2>
         <ol className="method-steps">
           {steps.map((step, index) => (
             <li key={step.title}>
-              <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
-              <div>
-                <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
-              </div>
+              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
             </li>
           ))}
         </ol>
-        <div className="method-cta">
-          <p>Quer saber por onde começar na sua empresa?</p>
-          <a className="button" href="#contato">Falar com o Bruno <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const trainingThemes = ["IA no dia a dia", "Automação na prática", "Workshop sob medida"];
-
-function Training() {
-  return (
-    <section className="training section-shell" id="treinamentos" aria-labelledby="training-title">
-      <img src={asset("assets/art/training/teacher.webp")} alt="" width={1024} height={1536} loading="lazy" />
-      <div className="training-copy">
-        <span>Treinamentos</span>
-        <h2 id="training-title">Treinamento de IA pra equipes</h2>
-        <p>
-          Encontro prático e remoto, montado em cima das tarefas e das ferramentas que a equipe já usa. Ninguém sai com mais uma palestra sobre o futuro.
-        </p>
-        <ul>
-          {trainingThemes.map((theme) => <li key={theme}>{theme}</li>)}
-        </ul>
-        <a className="text-link" href={tallyUrl({ path: "training", page: "home", cta: "treinamentos" })}>
-          Pedir um treinamento <ArrowRight size={16} weight="bold" aria-hidden="true" />
-        </a>
       </div>
     </section>
   );
@@ -260,7 +217,6 @@ export function App() {
         <Places />
         <About />
         <Method />
-        <Training />
         <Contact />
       </main>
       <Footer />
