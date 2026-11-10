@@ -23,7 +23,7 @@
 }
 
 :root {
-  --paper: #f9f5ed;
+  --paper: #fff;
   --paper-deep: #e9dfcb;
   --ink: #1d211f;
   --ink-soft: #5a5d58;
@@ -221,8 +221,9 @@ p { color: var(--ink-soft); line-height: 1.6; }
   grid-template-columns: minmax(0, .5fr) minmax(0, 1.5fr);
   align-items: center;
   gap: clamp(32px, 6vw, 96px);
-  padding-block: clamp(48px, 6vw, 80px);
-  border-block: 1px solid var(--line);
+  padding: clamp(40px, 5vw, 72px);
+  border-radius: 30px;
+  background: var(--cream);
 }
 .training > img { width: min(100%, 280px); justify-self: center; }
 .training-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
@@ -288,7 +289,7 @@ p { color: var(--ink-soft); line-height: 1.6; }
   .proof-card { grid-template-columns: 1fr; border-radius: 22px; }
   .proof-copy { padding-bottom: 24px; }
   .proof-card > img { width: 200px; }
-  .training { grid-template-columns: 1fr; }
+  .training { grid-template-columns: 1fr; padding: 32px 24px; border-radius: 22px; }
   .training > img { width: 170px; justify-self: start; }
   .about { grid-template-columns: 1fr; }
   .about > img { width: 220px; justify-self: start; }
