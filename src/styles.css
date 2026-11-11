@@ -111,7 +111,7 @@ p { color: var(--ink-soft); line-height: 1.6; }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.section-heading h2 { max-width: 15ch; font-size: clamp(2.7rem, 6vw, 5.4rem); }
+.section-heading h2 { max-width: 17ch; font-size: clamp(2.7rem, 6vw, 5.4rem); }
 .section-heading p { max-width: 36rem; margin-top: 24px; font-size: 1.08rem; }
 
 /* Header */
@@ -233,7 +233,7 @@ p { color: var(--ink-soft); line-height: 1.6; }
 /* Contact */
 .contact { padding-top: clamp(56px, 6vw, 84px); }
 .contact-scene { padding: clamp(72px, 10vw, 140px) clamp(40px, 5.5vw, 84px); }
-.contact h2 { max-width: 12ch; font-size: clamp(3rem, 7vw, 7rem); line-height: .9; }
+.contact h2 { max-width: 15ch; font-size: clamp(3rem, 7vw, 7rem); line-height: .9; }
 .contact-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 36px; margin-top: 44px; }
 .contact-email {
   display: inline-block;
