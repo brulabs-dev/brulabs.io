@@ -3,6 +3,16 @@ import { ArrowClockwise, ArrowRight, Check, HandPalm, InstagramLogo, LinkedinLog
 import { tallyUrl } from "./tally";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
+
+// Optional media, picked up by file name when present:
+//   src/assets/demos/{teo,ada,lia}.{mp4,webm}   screen recordings for the examples
+//   src/assets/method/{1,2,3,4}.{webp,png,jpg}  illustrations for the method tiles
+const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
+const methodFiles = import.meta.glob<string>("./assets/method/*.{webp,png,jpg}", { eager: true, query: "?url", import: "default" });
+const findMedia = (files: Record<string, string>, name: string) => {
+  const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
+  return key ? files[key] : undefined;
+};
 const EMAIL = "bruno@brulabs.io";
 const INSTAGRAM_URL = "https://www.instagram.com/bru.labs/";
 
@@ -385,12 +395,13 @@ function Hero() {
 }
 
 type RunStep = { time: string; text: string; human?: boolean };
-type Run = { agent: string; label: string; steps: RunStep[] };
+type Run = { agent: string; file: string; label: string; steps: RunStep[] };
 
 // Illustrative runs, not client cases.
 const runs: Run[] = [
   {
     agent: "Téo",
+    file: "teo",
     label: "Pedido por e-mail",
     steps: [
       { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
@@ -401,6 +412,7 @@ const runs: Run[] = [
   },
   {
     agent: "Ada",
+    file: "ada",
     label: "Atendimento no WhatsApp",
     steps: [
       { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
@@ -411,6 +423,7 @@ const runs: Run[] = [
   },
   {
     agent: "Lia",
+    file: "lia",
     label: "Relatório da semana",
     steps: [
       { time: "07:00", text: "Segunda cedo, a Lia abre as planilhas de vendas e o financeiro." },
@@ -431,6 +444,8 @@ function AgentDemo() {
   const [autoAdvance, setAutoAdvance] = useState(true);
   const panelRef = useRef<HTMLDivElement>(null);
   const run = runs[runIndex];
+  const video = findMedia(demoFiles, run.file);
+  const agentLook = BOARD_AGENTS.find((agent) => agent.name === run.agent) ?? BOARD_AGENTS[0];
 
   // Start the first time the panel is on screen; show everything at once under reduced motion.
   useEffect(() => {
@@ -485,17 +500,28 @@ function AgentDemo() {
             <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}><b>{item.agent}</b>{item.label}</button>
           ))}
         </div>
-        <ol className="demo-log" key={runIndex}>
-          {run.steps.map((step, index) => (
-            <li key={step.text} className={`${index < shown ? "is-shown" : ""}${step.human ? " is-human" : ""}`}>
-              <time>{step.time}</time>
-              <span className="demo-mark" aria-hidden="true">{step.human ? <HandPalm size={18} weight="fill" /> : <Check size={16} weight="bold" />}</span>
-              <p>{step.text}</p>
-            </li>
-          ))}
-        </ol>
+        <div className={`demo-body${video ? " has-video" : ""}`} key={runIndex}>
+          {video && (
+            <figure className="demo-screen">
+              <figcaption>
+                <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" />
+                <b style={{ background: agentLook.color, color: agentLook.text }}>{run.agent}</b>
+              </figcaption>
+              <video src={video} autoPlay muted loop playsInline preload="metadata" aria-label={`Gravação de tela: ${run.label}`} />
+            </figure>
+          )}
+          <ol className="demo-log">
+            {run.steps.map((step, index) => (
+              <li key={step.text} className={`${video || index < shown ? "is-shown" : ""}${step.human ? " is-human" : ""}`}>
+                <time>{step.time}</time>
+                <span className="demo-mark" aria-hidden="true">{step.human ? <HandPalm size={18} weight="fill" /> : <Check size={16} weight="bold" />}</span>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
         <div className="demo-foot">
-          <span>Exemplo ilustrativo</span>
+          <span>{video ? "Gravação de tela" : "Exemplo ilustrativo"}</span>
           <button type="button" onClick={() => choose(runIndex)}><ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Repetir</button>
         </div>
       </div>
@@ -531,13 +557,17 @@ function Method() {
         <h2 id="method-title">Uma tarefa de cada vez.</h2>
       </div>
       <ol className="method-steps">
-        {steps.map((step, index) => (
-          <li key={step.title}>
-            <span aria-hidden="true">{index === steps.length - 1 ? <Check size={22} weight="bold" /> : String(index + 1).padStart(2, "0")}</span>
-            <h3>{step.title}</h3>
-            <p>{step.description}</p>
-          </li>
-        ))}
+        {steps.map((step, index) => {
+          const image = findMedia(methodFiles, String(index + 1));
+          return (
+            <li key={step.title}>
+              <span aria-hidden="true">{index === steps.length - 1 ? <Check size={22} weight="bold" /> : String(index + 1).padStart(2, "0")}</span>
+              {image && <img src={image} alt="" loading="lazy" />}
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );
