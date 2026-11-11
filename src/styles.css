@@ -121,29 +121,36 @@ p { color: var(--ink-soft); line-height: 1.6; }
 .site-nav { display: flex; gap: clamp(18px, 2.4vw, 36px); font-size: .88rem; }
 .site-nav a:hover { color: var(--orange-dark); }
 
-/* Hero and contact share a framed scene with a pixel mosaic rising from the bottom corners */
+/* Hero: a board of small tasks that agent cursors clear alongside the visitor */
 .hero-scene, .contact-scene { position: relative; overflow: hidden; border-radius: 30px; isolation: isolate; }
-.pixel-field { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-
-/* Hero */
 .hero-scene {
-  display: grid;
   min-height: min(800px, calc(100dvh - 112px));
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
-  align-items: center;
-  padding: 72px clamp(40px, 5.5vw, 84px) 0;
-  background-color: #171a18;
-  background-image: radial-gradient(rgb(246 239 223 / 13%) 1.2px, transparent 1.6px);
-  background-size: 24px 24px;
-  color: var(--cream);
+  padding: clamp(56px, 7vw, 96px) clamp(40px, 5.5vw, 84px) 0;
+  background: var(--cream);
+  color: var(--ink);
 }
-.hero-copy { position: relative; z-index: 3; padding-bottom: clamp(150px, 20vh, 230px); }
+.task-board { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.hero-copy { position: relative; z-index: 2; width: min(100%, 720px); pointer-events: none; }
+.hero-copy a { pointer-events: auto; }
 .hero h1 { font-size: clamp(3rem, 5.8vw, 6.1rem); line-height: .92; }
-.hero h1 em { display: block; margin-top: .12em; color: #f49a6c; font-family: "Satoshi", sans-serif; font-size: .86em; font-weight: 430; letter-spacing: -.045em; }
-.hero-copy p { max-width: 34rem; margin: 30px 0 34px; color: rgb(246 239 223 / 80%); font-size: clamp(1.12rem, 1.45vw, 1.3rem); }
+.hero h1 em { display: block; margin-top: .12em; color: var(--orange-dark); font-family: "Satoshi", sans-serif; font-size: .86em; font-weight: 430; letter-spacing: -.045em; }
+.hero-copy p { max-width: 33rem; margin: 30px 0 34px; color: var(--ink); font-size: clamp(1.12rem, 1.45vw, 1.3rem); }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; }
 .hero-link { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; font-size: .92rem; font-weight: 740; }
-.hero-statue { position: relative; z-index: 1; width: min(100%, 440px); align-self: end; justify-self: center; margin-bottom: 4%; filter: drop-shadow(0 30px 40px rgb(0 0 0 / 45%)); }
+.hero-count {
+  position: absolute;
+  z-index: 2;
+  top: 22px;
+  right: 26px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--cream);
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  pointer-events: none;
+}
 
 /* Agent demo: a run log that plays step by step */
 .demo { padding-block: var(--gap); }
@@ -223,7 +230,6 @@ p { color: var(--ink-soft); line-height: 1.6; }
 /* Contact */
 .contact { padding-top: clamp(56px, 6vw, 84px); }
 .contact-scene { padding: clamp(72px, 10vw, 140px) clamp(40px, 5.5vw, 84px); background: var(--orange); color: var(--ink); }
-.contact-scene > :not(.pixel-field) { position: relative; z-index: 3; }
 .button-dark { background: var(--ink); color: var(--cream); }
 .button-dark:hover { background: #303532; }
 .contact h2 { max-width: 15ch; font-size: clamp(3rem, 7vw, 7rem); line-height: .9; }
@@ -263,13 +269,12 @@ p { color: var(--ink-soft); line-height: 1.6; }
   .site-header { height: 72px; }
   .brand img { width: 124px; }
   .hero-scene, .contact-scene { border-radius: 22px; }
-  .hero-scene { min-height: 0; grid-template-columns: 1fr; padding: 52px 26px 0; background-size: 15px 15px; }
-  .hero-copy { padding-bottom: 8px; }
-  .hero-statue { width: 230px; justify-self: end; margin: 0 4px 34px 0; }
+  .hero-scene { min-height: 0; padding: 64px 24px 330px; }
+  .hero-count { top: 14px; right: 14px; left: 14px; width: max-content; max-width: calc(100% - 28px); font-size: .76rem; }
   .method-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 18px; }
   .about-note { grid-template-columns: 1fr; transform: none; }
   .about-note > img { width: 170px; }
-  .contact-scene { padding: 56px 26px 150px; }
+  .contact-scene { padding: 56px 26px; }
   .demo-panel { border-radius: 22px; }
   .demo-log li { grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; border-radius: 14px; }
   .demo-log time { grid-column: 2; font-size: .9rem; }
