@@ -43,11 +43,11 @@ function seeded(seed: number) {
 }
 
 const BOARD_AGENTS = [
-  { name: "Atendimento", color: "#e9652e", text: "#1d211f" },
-  { name: "Documentos", color: "#1d211f", text: "#f6efdf" },
-  { name: "Relatórios", color: "#a92f1a", text: "#f6efdf" },
-  { name: "Pedidos", color: "#f49a6c", text: "#1d211f" },
-  { name: "Agenda", color: "#5a5d58", text: "#f6efdf" },
+  { name: "Ada", color: "#e9652e", text: "#1d211f" },
+  { name: "Téo", color: "#1d211f", text: "#f6efdf" },
+  { name: "Lia", color: "#a92f1a", text: "#f6efdf" },
+  { name: "Nico", color: "#f49a6c", text: "#1d211f" },
+  { name: "Bia", color: "#5a5d58", text: "#f6efdf" },
 ];
 const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
 
@@ -385,34 +385,38 @@ function Hero() {
 }
 
 type RunStep = { time: string; text: string; human?: boolean };
+type Run = { agent: string; label: string; steps: RunStep[] };
 
 // Illustrative runs, not client cases.
-const runs: { label: string; steps: RunStep[] }[] = [
+const runs: Run[] = [
   {
+    agent: "Téo",
     label: "Pedido por e-mail",
     steps: [
       { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
-      { time: "08:12", text: "O agente lê o pedido e confere o estoque no sistema." },
+      { time: "08:12", text: "O Téo lê o pedido e confere o estoque no sistema." },
       { time: "08:13", text: "Lança o pedido e manda um resumo no WhatsApp do gerente." },
-      { time: "08:13", text: "Um item está com preço fora da tabela. O agente não lança e pede aprovação.", human: true },
+      { time: "08:13", text: "Um item está com preço fora da tabela. O Téo não lança e pede aprovação.", human: true },
     ],
   },
   {
+    agent: "Ada",
     label: "Atendimento no WhatsApp",
     steps: [
       { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
-      { time: "14:03", text: "O agente busca o pedido no sistema e acha o código de rastreio." },
+      { time: "14:03", text: "A Ada busca o pedido no sistema e acha o código de rastreio." },
       { time: "14:04", text: "Responde ao cliente com o prazo e o link." },
-      { time: "14:20", text: "O cliente reclama de um item quebrado. O agente passa a conversa pra uma pessoa.", human: true },
+      { time: "14:20", text: "O cliente reclama de um item quebrado. A Ada passa a conversa pra uma pessoa.", human: true },
     ],
   },
   {
+    agent: "Lia",
     label: "Relatório da semana",
     steps: [
-      { time: "07:00", text: "Segunda cedo, o agente abre as planilhas de vendas e o financeiro." },
+      { time: "07:00", text: "Segunda cedo, a Lia abre as planilhas de vendas e o financeiro." },
       { time: "07:01", text: "Junta os números da semana e compara com a anterior." },
       { time: "07:02", text: "Envia o relatório por e-mail pra diretoria." },
-      { time: "07:02", text: "Uma filial não lançou os dados. O agente avisa o responsável em vez de chutar.", human: true },
+      { time: "07:02", text: "Uma filial não lançou os dados. A Lia avisa o responsável em vez de chutar.", human: true },
     ],
   },
 ];
@@ -478,7 +482,7 @@ function AgentDemo() {
       <div className="demo-panel" ref={panelRef}>
         <div className="demo-tabs" role="group" aria-label="Escolher a tarefa de exemplo">
           {runs.map((item, index) => (
-            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}>{item.label}</button>
+            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}><b>{item.agent}</b>{item.label}</button>
           ))}
         </div>
         <ol className="demo-log" key={runIndex}>
@@ -502,7 +506,7 @@ function AgentDemo() {
 
 const steps = [
   {
-    title: "Uma tarefa por vez",
+    title: "Escolha da tarefa",
     description: "Começamos por uma tarefa só, repetitiva e bem definida.",
   },
   {
@@ -521,19 +525,20 @@ const steps = [
 
 function Method() {
   return (
-    <section className="method" id="metodo" aria-labelledby="method-title">
-      <div className="section-shell method-inner">
-        <h2 id="method-title">Como trabalhamos</h2>
-        <ol className="method-steps">
-          {steps.map((step, index) => (
-            <li key={step.title}>
-              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-              <h3>{step.title}</h3>
-              <p>{step.description}</p>
-            </li>
-          ))}
-        </ol>
+    <section className="method section-shell" id="metodo" aria-labelledby="method-title">
+      <div className="section-heading">
+        <span>Como trabalhamos</span>
+        <h2 id="method-title">Uma tarefa de cada vez.</h2>
       </div>
+      <ol className="method-steps">
+        {steps.map((step, index) => (
+          <li key={step.title}>
+            <span aria-hidden="true">{index === steps.length - 1 ? <Check size={22} weight="bold" /> : String(index + 1).padStart(2, "0")}</span>
+            <h3>{step.title}</h3>
+            <p>{step.description}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -542,7 +547,7 @@ function About() {
   return (
     <section className="about section-shell" id="sobre" aria-labelledby="about-title">
       <div className="about-note">
-        <img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, da BruLabs" width={1254} height={1254} loading="lazy" />
+        <img src={asset("assets/brand/bruno.webp")} alt="Bruno, da BruLabs" width={720} height={720} loading="lazy" />
         <div>
           <span>Quem faz</span>
           <h2 id="about-title">Oi, eu sou o Bruno.</h2>
@@ -560,10 +565,74 @@ function About() {
   );
 }
 
-function Contact() {
+// One period of rolling hills, drawn twice so the layer can loop sideways without a seam.
+function hillPath(base: number, waves: [number, number, number][]) {
+  const points: string[] = [];
+  for (let x = 0; x <= 2880; x += 24) {
+    const y = waves.reduce((sum, [amplitude, cycles, phase]) => sum + amplitude * Math.sin((x / 1440) * Math.PI * 2 * cycles + phase), base);
+    points.push(`${x},${y.toFixed(1)}`);
+  }
+  return `M0,360 L${points.join(" L")} L2880,360 Z`;
+}
+
+const hills = [
+  { color: "#f7b48f", seconds: 150, path: hillPath(150, [[34, 1, 0.4], [14, 3, 1.9]]) },
+  { color: "#f07740", seconds: 110, path: hillPath(196, [[40, 2, 2.2], [12, 5, 0.3]]) },
+  { color: "#c94e1c", seconds: 80, path: hillPath(246, [[30, 1, 3.4], [16, 4, 1.1]]) },
+  { color: "#a92f1a", seconds: 56, path: hillPath(296, [[22, 3, 0.9], [9, 7, 2.6]]) },
+];
+
+function Landscape() {
   return (
-    <section className="contact section-shell" id="contato" aria-labelledby="contact-title">
-      <div className="contact-scene">
+    <div className="landscape" aria-hidden="true">
+      {BOARD_AGENTS.slice(0, 3).map((agent, index) => (
+        <span className={`sky-agent sky-agent-${index + 1}`} key={agent.name}>
+          <svg viewBox="-2 -2 18 24" width="20" height="27"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+          <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
+        </span>
+      ))}
+      <svg className="hills" viewBox="0 0 1440 360" preserveAspectRatio="none">
+        <defs>
+          <filter id="hill-grain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch" result="noise" />
+            <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 .96  0 0 0 0 .88  0 0 0 .5 -.12" />
+            <feComposite operator="in" in2="SourceGraphic" />
+            <feBlend in2="SourceGraphic" mode="soft-light" />
+          </filter>
+        </defs>
+        <g filter="url(#hill-grain)">
+          {hills.map((hill) => (
+            <path key={hill.color} d={hill.path} fill={hill.color} style={{ animationDuration: `${hill.seconds}s` }} />
+          ))}
+        </g>
+      </svg>
+      <svg className="desk" viewBox="0 0 200 150">
+        <rect x="20" y="92" width="112" height="5" />
+        <rect x="24" y="97" width="4" height="53" />
+        <rect x="124" y="97" width="4" height="53" />
+        <rect x="44" y="50" width="5" height="37" rx="2" />
+        <rect x="46" y="86" width="3" height="6" />
+        <rect x="37" y="89" width="20" height="3" />
+        <rect x="176" y="68" width="6" height="48" rx="3" />
+        <rect x="140" y="112" width="42" height="6" rx="3" />
+        <rect x="158" y="118" width="4" height="22" />
+        <rect x="142" y="140" width="38" height="5" rx="2" />
+        <circle cx="146" cy="52" r="11" />
+        <path d="M151 63 C169 66 175 90 172 113 L146 113 C147 97 141 79 138 70 Z" />
+        <path d="M143 71 L111 89 L112 95 L147 85 Z" />
+        <rect x="118" y="105" width="50" height="11" rx="5" />
+        <rect x="116" y="108" width="10" height="40" rx="4" />
+        <rect x="105" y="143" width="21" height="7" rx="3" />
+      </svg>
+      <div className="ground" />
+    </div>
+  );
+}
+
+function Closing() {
+  return (
+    <footer className="closing" id="contato" aria-labelledby="contact-title">
+      <div className="section-shell closing-inner">
         <h2 id="contact-title">Que tarefa você passaria para um agente?</h2>
         <div className="contact-actions">
           <a className="button button-dark" href={whatsappUrl} target="_blank" rel="noreferrer">
@@ -571,20 +640,19 @@ function Contact() {
           </a>
           <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
         </div>
-        <p>
-          Estamos no <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">Instagram</a> e no <a href={LINKEDIN_URL} target="_blank" rel="noreferrer">LinkedIn</a>. Se preferir, <a href={tallyUrl({ page: "home", cta: "contato" })}>preencha o formulário</a>.
-        </p>
+        <div className="closing-meta">
+          <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
+          <div>
+            <span>Florianópolis, SC</span>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer"><InstagramLogo size={18} weight="fill" aria-hidden="true" /> Instagram</a>
+            <a href={LINKEDIN_URL} target="_blank" rel="noreferrer"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /> LinkedIn</a>
+            <a href={tallyUrl({ page: "home", cta: "contato" })}>Formulário</a>
+            <a href={asset("privacidade/")}>Privacidade</a>
+          </div>
+          <span>© 2026 BruLabs</span>
+        </div>
       </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="footer section-shell">
-      <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><span>Florianópolis, SC</span><a href={`mailto:${EMAIL}`}>{EMAIL}</a><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" aria-label="Instagram da BruLabs"><InstagramLogo size={18} weight="fill" aria-hidden="true" /></a><a href={LINKEDIN_URL} target="_blank" rel="noreferrer" aria-label="LinkedIn do Bruno"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /></a><a href={asset("privacidade/")}>Privacidade</a></div>
-      <span>© 2026 BruLabs</span>
+      <Landscape />
     </footer>
   );
 }
@@ -599,9 +667,8 @@ export function App() {
         <AgentDemo />
         <About />
         <Method />
-        <Contact />
       </main>
-      <Footer />
+      <Closing />
     </div>
   );
 }
