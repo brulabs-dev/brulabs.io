@@ -31,40 +31,137 @@ function Header() {
   );
 }
 
-function Hero() {
-  const sceneRef = useRef<HTMLDivElement>(null);
+// Small seeded generator so the mosaic has the same shape on every load.
+function seeded(seed: number) {
+  let state = seed;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-  // The statue and the rings drift a few pixels with the pointer, for depth.
+type PixelFieldProps = { palette: string[]; glow: string; leftPeak: number; rightPeak: number; narrowScale?: number };
+
+// Mosaic that rises from the bottom corners: squares on the left, dots on the right.
+// Cells flicker between palette shades and light up near the pointer.
+function PixelField({ palette, glow, leftPeak, rightPeak, narrowScale = 1 }: PixelFieldProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
-    const scene = sceneRef.current;
-    const canMove = window.matchMedia("(hover: hover) and (prefers-reduced-motion: no-preference)");
-    if (!scene || !canMove.matches) return;
+    const canvas = canvasRef.current;
+    const host = canvas?.parentElement;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !host || !context) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const random = seeded(23);
+    let cells: { x: number; y: number; shade: number; round: boolean }[] = [];
+    let size = 24;
+    let width = 0;
+    let height = 0;
+    let pointer: { x: number; y: number } | null = null;
     let frame = 0;
-    const onMove = (event: PointerEvent) => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        const box = scene.getBoundingClientRect();
-        const x = (event.clientX - box.left) / box.width - 0.5;
-        const y = (event.clientY - box.top) / box.height - 0.5;
-        scene.style.setProperty("--px", x.toFixed(3));
-        scene.style.setProperty("--py", y.toFixed(3));
-      });
+    let lastFlicker = 0;
+    let onScreen = true;
+
+    const build = () => {
+      const box = host.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      width = box.width;
+      height = box.height;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      size = width < 700 ? 15 : 24;
+      const scale = width < 700 ? narrowScale : 1;
+      const columns = Math.ceil(width / size);
+      const rows = Math.ceil(height / size);
+      const shape = seeded(11);
+      let drift = 0;
+      cells = [];
+      for (let column = 0; column < columns; column += 1) {
+        const t = columns > 1 ? column / (columns - 1) : 0;
+        const left = leftPeak * scale * Math.pow(Math.max(0, 1 - t / 0.44), 1.35);
+        const right = rightPeak * scale * Math.pow(Math.max(0, (t - 0.5) / 0.5), 1.25);
+        drift = (drift + (shape() - 0.5) * 0.11) * 0.84;
+        const level = (Math.max(left, right) + drift) * rows;
+        if (Math.max(left, right) <= 0.004) continue;
+        for (let depth = 0; depth < rows; depth += 1) {
+          const edge = depth - level;
+          if (edge > 3) break;
+          if (edge > -1 && shape() > 0.5 - edge * 0.13) continue;
+          cells.push({ x: column * size, y: height - (depth + 1) * size, shade: Math.floor(shape() * palette.length), round: t > 0.5 });
+        }
+      }
     };
-    const onLeave = () => { scene.style.setProperty("--px", "0"); scene.style.setProperty("--py", "0"); };
-    scene.addEventListener("pointermove", onMove);
-    scene.addEventListener("pointerleave", onLeave);
+
+    const draw = () => {
+      context.clearRect(0, 0, width, height);
+      const reach = size * 3.2;
+      for (const cell of cells) {
+        const near = pointer && Math.hypot(cell.x + size / 2 - pointer.x, cell.y + size / 2 - pointer.y) < reach;
+        context.fillStyle = near ? glow : palette[cell.shade];
+        if (cell.round) {
+          context.beginPath();
+          context.arc(cell.x + size / 2, cell.y + size / 2, size * 0.45, 0, Math.PI * 2);
+          context.fill();
+        } else {
+          context.fillRect(cell.x, cell.y, size, size);
+        }
+      }
+    };
+
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (!onScreen || time - lastFlicker < 110) return;
+      lastFlicker = time;
+      const changes = Math.max(4, Math.round(cells.length * 0.02));
+      for (let index = 0; index < changes; index += 1) {
+        const cell = cells[Math.floor(random() * cells.length)];
+        if (cell) cell.shade = Math.floor(random() * palette.length);
+      }
+      draw();
+    };
+
+    const onMove = (event: PointerEvent) => {
+      const box = host.getBoundingClientRect();
+      pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
+      if (reduced) draw();
+    };
+    const onLeave = () => { pointer = null; if (reduced) draw(); };
+    const onResize = () => { build(); draw(); };
+
+    build();
+    draw();
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(host);
+    const visibility = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+    visibility.observe(host);
+    host.addEventListener("pointermove", onMove);
+    host.addEventListener("pointerleave", onLeave);
+    if (!reduced) frame = window.requestAnimationFrame(tick);
+
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
-      scene.removeEventListener("pointermove", onMove);
-      scene.removeEventListener("pointerleave", onLeave);
+      resizeObserver.disconnect();
+      visibility.disconnect();
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
     };
-  }, []);
+  }, [palette, glow, leftPeak, rightPeak, narrowScale]);
 
+  return <canvas className="pixel-field" ref={canvasRef} aria-hidden="true" />;
+}
+
+const HERO_PIXELS = ["#e9652e", "#e9652e", "#f07740", "#c94e1c", "#a92f1a", "#f49a6c", "#f6efdf"];
+const CONTACT_PIXELS = ["#c94e1c", "#c94e1c", "#a92f1a", "#f07740", "#f49a6c", "#1d211f", "#f6efdf"];
+
+function Hero() {
   return (
     <section className="hero section-shell" id="topo" aria-labelledby="hero-title">
-      <div className="hero-scene" ref={sceneRef}>
-        <div className="rings" aria-hidden="true" />
+      <div className="hero-scene">
         <div className="hero-copy">
           <h1 id="hero-title">
             Agentes de IA para empresas. <em>Feitos sob medida.</em>
@@ -73,11 +170,12 @@ function Hero() {
             A BruLabs é uma startup de software de Florianópolis. Construímos agentes que assumem tarefas repetitivas da operação, ligados às ferramentas que a empresa já usa.
           </p>
           <div className="hero-actions">
-            <a className="button button-light" href="#contato">Falar com a BruLabs <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
+            <a className="button" href="#contato">Falar com a BruLabs <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
             <a className="hero-link" href="#agentes">Ver um agente trabalhando <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
           </div>
         </div>
         <img className="hero-statue" src={asset("assets/art/hero/statue-modern.webp")} alt="" width={1024} height={1536} fetchPriority="high" />
+        <PixelField palette={HERO_PIXELS} glow="#fff6e4" leftPeak={0.25} rightPeak={0.5} />
       </div>
     </section>
   );
@@ -263,10 +361,10 @@ function Contact() {
   return (
     <section className="contact section-shell" id="contato" aria-labelledby="contact-title">
       <div className="contact-scene">
-        <div className="rings" aria-hidden="true" />
+        <PixelField palette={CONTACT_PIXELS} glow="#fff6e4" leftPeak={0.12} rightPeak={0.62} narrowScale={0.36} />
         <h2 id="contact-title">Que tarefa você passaria para um agente?</h2>
         <div className="contact-actions">
-          <a className="button button-light" href={whatsappUrl} target="_blank" rel="noreferrer">
+          <a className="button button-dark" href={whatsappUrl} target="_blank" rel="noreferrer">
             <WhatsappLogo size={20} weight="fill" aria-hidden="true" /> Chamar no WhatsApp
           </a>
           <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
