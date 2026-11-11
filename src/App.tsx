@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ArrowRight, LinkedinLogo, WhatsappLogo } from "@phosphor-icons/react";
+import { ArrowRight, InstagramLogo, LinkedinLogo, WhatsappLogo } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const EMAIL = "bruno@brulabs.io";
+const INSTAGRAM_URL = "https://www.instagram.com/bru.labs/";
 
 // TODO: placeholders. Replace both with the real values before publishing.
 const WHATSAPP_NUMBER = "5548900000000";
@@ -190,7 +191,7 @@ function Contact() {
           <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
         </div>
         <p>
-          Também estou no <a href={LINKEDIN_URL} target="_blank" rel="noreferrer">LinkedIn</a>. Se preferir, <a href={tallyUrl({ page: "home", cta: "contato" })}>preencha o formulário</a>.
+          Também estou no <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">Instagram</a> e no <a href={LINKEDIN_URL} target="_blank" rel="noreferrer">LinkedIn</a>. Se preferir, <a href={tallyUrl({ page: "home", cta: "contato" })}>preencha o formulário</a>.
         </p>
       </div>
     </section>
@@ -201,7 +202,7 @@ function Footer() {
   return (
     <footer className="footer section-shell">
       <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><span>Florianópolis, SC</span><a href={`mailto:${EMAIL}`}>{EMAIL}</a><a href={LINKEDIN_URL} target="_blank" rel="noreferrer" aria-label="LinkedIn do Bruno"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /></a><a href={asset("privacidade/")}>Privacidade</a></div>
+      <div><span>Florianópolis, SC</span><a href={`mailto:${EMAIL}`}>{EMAIL}</a><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" aria-label="Instagram da BruLabs"><InstagramLogo size={18} weight="fill" aria-hidden="true" /></a><a href={LINKEDIN_URL} target="_blank" rel="noreferrer" aria-label="LinkedIn do Bruno"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /></a><a href={asset("privacidade/")}>Privacidade</a></div>
       <span>© 2026 BruLabs</span>
     </footer>
   );
