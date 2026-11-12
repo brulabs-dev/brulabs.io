@@ -5,7 +5,7 @@ import { tallyUrl } from "./tally";
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 // Optional media, picked up by file name when present:
-//   src/assets/demos/{ollie,amora,maia}.{mp4,webm}   screen recordings for the examples
+//   src/assets/demos/{pedido,atendimento,relatorio}.{mp4,webm}  screen recordings for the examples
 //   src/assets/footer/mesa.{png,webp}                 the empty desk in the footer landscape
 const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
 const footerFiles = import.meta.glob<string>("./assets/footer/*.{png,webp}", { eager: true, query: "?url", import: "default" });
@@ -52,15 +52,8 @@ function seeded(seed: number) {
   };
 }
 
-// Earthy tones chosen to sit next to the brand orange, cream and ink.
-const BOARD_AGENTS = [
-  { name: "Ollie", color: "#e9652e", text: "#1d211f" },
-  { name: "Amora", color: "#9c3b3b", text: "#f6efdf" },
-  { name: "Bolt", color: "#d9a441", text: "#1d211f" },
-  { name: "Maia", color: "#6b7b4b", text: "#f6efdf" },
-  { name: "Ted", color: "#1d211f", text: "#f6efdf" },
-  { name: "Simon", color: "#3d6670", text: "#f6efdf" },
-];
+// One colour per agent cursor: earthy tones chosen to sit next to the brand orange, cream and ink.
+const AGENT_COLORS = ["#e9652e", "#9c3b3b", "#d9a441", "#6b7b4b", "#1d211f", "#3d6670"];
 const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
 
 type BoardCell = { x: number; y: number; state: 0 | 1 | 2; since: number; taken: boolean };
@@ -143,7 +136,7 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
           cells.push({ x: offsetX + column * pitch, y: height - (depth + 1) * pitch, state, since: -9999, taken: false });
         }
       }
-      const count = narrow ? 3 : BOARD_AGENTS.length;
+      const count = narrow ? 3 : AGENT_COLORS.length;
       const entries = [
         { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: width * 0.6, y: height + 40 },
         { x: width + 40, y: height * 0.75 }, { x: width * 0.35, y: height + 40 }, { x: width * 0.85, y: -40 },
@@ -244,22 +237,6 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
       context.restore();
     };
 
-    const drawLabel = (x: number, y: number, label: string, color: string, text: string) => {
-      const size = tile < 40 ? 11 : 13;
-      context.font = `700 ${size}px Satoshi, sans-serif`;
-      const labelWidth = context.measureText(label).width + size * 1.4;
-      const labelHeight = size * 1.9;
-      const left = Math.max(6, Math.min(x + 15, width - labelWidth - 6));
-      const top = y + 20 + labelHeight > height - 6 ? y - labelHeight - 6 : y + 20;
-      context.fillStyle = color;
-      context.beginPath();
-      context.roundRect(left, top, labelWidth, labelHeight, labelHeight / 2);
-      context.fill();
-      context.fillStyle = text;
-      context.textBaseline = "middle";
-      context.fillText(label, left + size * 0.7, top + labelHeight / 2 + 0.5);
-    };
-
     const draw = (time: number) => {
       context.clearRect(0, 0, width, height);
       const hovered = pointer ? cellAt(pointer.x, pointer.y) : undefined;
@@ -294,16 +271,12 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
       }
       if (!active && canHover) {
         // Before the visitor arrives, one agent waits on the board without doing anything.
-        const waiting = BOARD_AGENTS[0];
-        drawPointer(width * 0.74, height * 0.6, waiting.color, 0);
-        drawLabel(width * 0.74, height * 0.6, waiting.name, waiting.color, waiting.text);
+        drawPointer(width * 0.74, height * 0.6, AGENT_COLORS[0], 0);
       }
       agents.forEach((agent, index) => {
         if (!active || time - startedAt < agent.enterAt) return;
-        const look = BOARD_AGENTS[index];
         const pressed = Math.max(0, 1 - (time - agent.pressedAt) / 260);
-        drawPointer(agent.x, agent.y, look.color, pressed);
-        drawLabel(agent.x, agent.y, look.name, look.color, look.text);
+        drawPointer(agent.x, agent.y, AGENT_COLORS[index], pressed);
       });
     };
 
@@ -397,41 +370,38 @@ function Hero() {
 }
 
 type RunStep = { time: string; text: string; human?: boolean };
-type Run = { agent: string; file: string; label: string; steps: RunStep[] };
+type Run = { file: string; label: string; steps: RunStep[] };
 
 // Illustrative runs, not client cases.
 const runs: Run[] = [
   {
-    agent: "Ollie",
-    file: "ollie",
+    file: "pedido",
     label: "Pedido por e-mail",
     steps: [
       { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
-      { time: "08:12", text: "O Ollie lê o pedido e confere o estoque no sistema." },
+      { time: "08:12", text: "O agente lê o pedido e confere o estoque no sistema." },
       { time: "08:13", text: "Lança o pedido e manda um resumo no WhatsApp do gerente." },
-      { time: "08:13", text: "Um item está com preço fora da tabela. O Ollie não lança e pede aprovação.", human: true },
+      { time: "08:13", text: "Um item está com preço fora da tabela. O bot não lança e pede aprovação.", human: true },
     ],
   },
   {
-    agent: "Amora",
-    file: "amora",
+    file: "atendimento",
     label: "Atendimento no WhatsApp",
     steps: [
       { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
-      { time: "14:03", text: "A Amora busca o pedido no sistema e acha o código de rastreio." },
+      { time: "14:03", text: "A IA busca o pedido no sistema e acha o código de rastreio." },
       { time: "14:04", text: "Responde ao cliente com o prazo e o link." },
-      { time: "14:20", text: "O cliente reclama de um item quebrado. A Amora passa a conversa pra uma pessoa.", human: true },
+      { time: "14:20", text: "O cliente reclama de um item quebrado. O agente passa a conversa pra uma pessoa.", human: true },
     ],
   },
   {
-    agent: "Maia",
-    file: "maia",
+    file: "relatorio",
     label: "Relatório da semana",
     steps: [
-      { time: "07:00", text: "Segunda cedo, a Maia abre as planilhas de vendas e o financeiro." },
+      { time: "07:00", text: "Segunda cedo, o bot abre as planilhas de vendas e o financeiro." },
       { time: "07:01", text: "Junta os números da semana e compara com a anterior." },
       { time: "07:02", text: "Envia o relatório por e-mail pra diretoria." },
-      { time: "07:02", text: "Uma filial não lançou os dados. A Maia avisa o responsável em vez de chutar.", human: true },
+      { time: "07:02", text: "Uma filial não lançou os dados. A IA avisa o responsável em vez de chutar.", human: true },
     ],
   },
 ];
@@ -447,7 +417,6 @@ function AgentDemo() {
   const panelRef = useRef<HTMLDivElement>(null);
   const run = runs[runIndex];
   const video = findMedia(demoFiles, run.file);
-  const agentLook = BOARD_AGENTS.find((agent) => agent.name === run.agent) ?? BOARD_AGENTS[0];
 
   // Start the first time the panel is on screen; show everything at once under reduced motion.
   useEffect(() => {
@@ -499,7 +468,7 @@ function AgentDemo() {
       <div className="demo-panel" ref={panelRef}>
         <div className="demo-tabs" role="group" aria-label="Escolher a tarefa de exemplo">
           {runs.map((item, index) => (
-            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}><b>{item.agent}</b>{item.label}</button>
+            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}>{item.label}</button>
           ))}
         </div>
         <div className={`demo-body${video ? " has-video" : ""}`} key={runIndex}>
@@ -507,7 +476,6 @@ function AgentDemo() {
             <figure className="demo-screen">
               <figcaption>
                 <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" />
-                <b style={{ background: agentLook.color, color: agentLook.text }}>{run.agent}</b>
               </figcaption>
               <video src={video} autoPlay muted loop playsInline preload="metadata" aria-label={`Gravação de tela: ${run.label}`} />
             </figure>
@@ -560,14 +528,13 @@ function Method() {
       </div>
       <ol className="method-steps">
         {steps.map((step, index) => {
-          const agent = BOARD_AGENTS[index];
           return (
             <li key={step.title}>
               <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
               <h3>{step.title}</h3>
               <p>{step.description}</p>
               <div className="method-agent" aria-hidden="true">
-                <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
+                <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[index]} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
               </div>
             </li>
           );
@@ -622,7 +589,7 @@ const hills: Hill[] = [
 const CARAVAN_HILL = 2;
 const CARAVAN_SECONDS = 70;
 
-// Drifting hills with the six agents crossing them in single file, and an empty desk in the corner.
+// Drifting hills with the six agent cursors crossing them in single file, and an empty desk in the corner.
 function Landscape() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const desk = findMedia(footerFiles, "mesa");
@@ -684,10 +651,9 @@ function Landscape() {
           {hills.map((hill) => <path key={hill.color} d={hillPath(hill)} fill={hill.color} />)}
         </g>
       </svg>
-      {BOARD_AGENTS.map((agent) => (
-        <span className="walker" key={agent.name}>
-          <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
-          <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+      {AGENT_COLORS.map((color) => (
+        <span className="walker" key={color}>
+          <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
         </span>
       ))}
       {desk && <img className="desk" src={desk} alt="" loading="lazy" />}

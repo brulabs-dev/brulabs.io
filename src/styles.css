@@ -172,15 +172,12 @@ p { color: var(--ink-soft); line-height: 1.6; }
   transition: background-color .2s, color .2s, border-color .2s;
 }
 .demo-tabs button:hover, .demo-foot button:hover { border-color: var(--cream); }
-.demo-tabs b { padding: 3px 9px; border-radius: 999px; background: rgb(246 239 223 / 16%); font-size: .86em; }
-.demo-tabs button[aria-pressed="true"] b { background: var(--ink); color: var(--cream); }
 .demo-tabs button[aria-pressed="true"] { border-color: var(--orange); background: var(--orange); color: var(--ink); }
 .demo-body { margin-top: clamp(20px, 3vw, 36px); }
 .demo-body.has-video { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: clamp(16px, 2.4vw, 32px); }
 .demo-screen { overflow: hidden; border: 1px solid rgb(246 239 223 / 16%); border-radius: 18px; background: #0f1211; }
 .demo-screen figcaption { display: flex; height: 44px; align-items: center; gap: 7px; padding-inline: 16px; background: #242a27; }
 .demo-screen i { width: 11px; height: 11px; border-radius: 50%; background: rgb(246 239 223 / 22%); }
-.demo-screen b { margin-left: auto; padding: 4px 12px; border-radius: 999px; font-size: .82rem; }
 .demo-screen video { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
 .demo-log { display: grid; gap: 10px; }
 .has-video .demo-log li { grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; padding: 14px 16px; border-radius: 14px; }
@@ -271,7 +268,6 @@ p { color: var(--ink-soft); line-height: 1.6; }
 /* Each walker is anchored by the tip of its cursor, which rides the ridge of a hill. */
 .walker { position: absolute; top: 0; left: 0; width: 0; height: 0; will-change: transform; }
 .walker svg { position: absolute; bottom: -4px; left: -4px; width: clamp(24px, 2.6vw, 34px); height: auto; overflow: visible; filter: drop-shadow(0 4px 5px rgb(86 30 8 / 35%)); transform: translateY(-18%); }
-.walker b { position: absolute; bottom: clamp(34px, 3.6vw, 48px); left: 0; padding: 3px 10px; border-radius: 999px; font-size: .78rem; white-space: nowrap; transform: translateX(-30%); }
 
 /* Footer */
 .footer { display: flex; min-height: 120px; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding-block: 28px; }
