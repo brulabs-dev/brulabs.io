@@ -57,7 +57,7 @@ const AGENT_COLORS = ["#e9652e", "#9c3b3b", "#d9a441", "#6b7b4b", "#1d211f", "#3
 const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
 
 type BoardCell = { x: number; y: number; state: 0 | 1 | 2; since: number; taken: boolean };
-type BoardAgent = { x: number; y: number; target: BoardCell | null; clickAt: number; pressedAt: number; enterAt: number };
+type BoardAgent = { x: number; y: number; target: BoardCell | null; clickAt: number; pressedAt: number; enterAt: number; leftSide: boolean };
 
 // A board of small pending tasks. It sits still until the visitor moves over it;
 // then agent cursors come in from the edges and clear tasks alongside the visitor.
@@ -138,11 +138,12 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
       }
       const count = narrow ? 3 : AGENT_COLORS.length;
       const entries = [
-        { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: width * 0.6, y: height + 40 },
-        { x: width + 40, y: height * 0.75 }, { x: width * 0.35, y: height + 40 }, { x: width * 0.85, y: -40 },
+        { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: -40, y: height * 0.86 },
+        { x: width + 40, y: height * 0.75 }, { x: width * 0.22, y: height + 40 }, { x: width * 0.85, y: -40 },
       ];
       if (canHover) entries[0] = { x: width * 0.74, y: height * 0.6 };
-      agents = entries.slice(0, count).map((entry, index) => ({ ...entry, target: null, clickAt: 0, pressedAt: -9999, enterAt: index * 1100 }));
+      // On wide screens two agents keep to the left half, so the strip under the text is not left alone.
+      agents = entries.slice(0, count).map((entry, index) => ({ ...entry, target: null, clickAt: 0, pressedAt: -9999, enterAt: index * 1100, leftSide: !narrow && (index === 2 || index === 4) }));
     };
 
     const complete = (cell: BoardCell, time: number, visitor: boolean) => {
@@ -156,7 +157,10 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
     const cellAt = (x: number, y: number) => cells.find((cell) => x >= cell.x && x <= cell.x + tile && y >= cell.y && y <= cell.y + tile);
 
     const pickTarget = (agent: BoardAgent) => {
-      const open = cells.filter((cell) => cell.state === 1 && !cell.taken);
+      const free = cells.filter((cell) => cell.state === 1 && !cell.taken);
+      const half = width * 0.5;
+      const own = free.filter((cell) => (cell.x < half) === agent.leftSide);
+      const open = own.length > 0 ? own : free;
       if (open.length === 0) return null;
       open.sort((first, second) => Math.hypot(first.x - agent.x, first.y - agent.y) - Math.hypot(second.x - agent.x, second.y - agent.y));
       const choice = open[Math.floor(random() * Math.min(7, open.length))];
