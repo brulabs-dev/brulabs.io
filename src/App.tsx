@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowClockwise, ArrowRight, Check, HandPalm, InstagramLogo, LinkedinLogo, WhatsappLogo } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowRight, Check, HandPalm, InstagramLogo, LinkedinLogo, Plus, WhatsappLogo, X } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
@@ -508,37 +508,63 @@ const steps = [
   {
     title: "Escolha da tarefa",
     description: "Começamos por uma tarefa só, repetitiva e bem definida.",
+    detail: "Uma boa primeira tarefa se repete toda semana, segue regras claras e hoje toma tempo de alguém.",
   },
   {
     title: "Agente sob medida",
     description: "Construímos ligado às ferramentas que a empresa já usa.",
+    detail: "O agente trabalha dentro do que já existe: e-mail, WhatsApp, planilhas e o sistema de gestão. Ninguém troca de ferramenta.",
   },
   {
     title: "Teste com a equipe",
     description: "Com casos reais, antes de entrar na rotina.",
+    detail: "Quem faz a tarefa hoje acompanha o agente em casos reais e aponta onde ele erra. Só depois ele entra na rotina.",
   },
   {
     title: "Ajuste em uso",
     description: "Acompanhamos e corrigimos conforme o agente trabalha.",
+    detail: "Tarefas mudam. Seguimos acompanhando o agente em operação e ajustamos quando a regra muda.",
   },
 ];
+// Text colour that reads on each agent colour, in the same order as AGENT_COLORS.
+const AGENT_TEXT = ["#1d211f", "#f6efdf", "#1d211f", "#f6efdf", "#f6efdf", "#f6efdf"];
 
 function Method() {
+  const [flipped, setFlipped] = useState<number | null>(null);
+
   return (
     <section className="method section-shell" id="metodo" aria-labelledby="method-title">
       <div className="section-heading">
         <span>Como trabalhamos</span>
         <h2 id="method-title">Uma tarefa de cada vez.</h2>
+        <p>Clique num cartão para ver mais.</p>
       </div>
       <ol className="method-steps">
         {steps.map((step, index) => {
+          const isFlipped = flipped === index;
           return (
-            <li key={step.title}>
-              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-              <h3>{step.title}</h3>
-              <p>{step.description}</p>
-              <div className="method-agent" aria-hidden="true">
-                <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[index]} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
+            <li key={step.title} className={isFlipped ? "is-flipped" : undefined}>
+              <div className="card-inner">
+                <div className="card-face card-front" inert={isFlipped} onClick={() => setFlipped(index)}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                  <div className="method-agent" aria-hidden="true">
+                    <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[index]} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
+                  </div>
+                  <button type="button" className="card-toggle" aria-label={`Ver mais sobre: ${step.title}`}><Plus size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
+                <div
+                  className="card-face card-back"
+                  inert={!isFlipped}
+                  style={{ background: AGENT_COLORS[index], color: AGENT_TEXT[index] }}
+                  onClick={(event) => { if (!(event.target as HTMLElement).closest("a")) setFlipped(null); }}
+                >
+                  <h3>{step.title}</h3>
+                  <p>{step.detail}</p>
+                  <a className="text-link" href="#contato">Falar sobre uma tarefa <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
+                  <button type="button" className="card-toggle" aria-label="Voltar o cartão"><X size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
               </div>
             </li>
           );
