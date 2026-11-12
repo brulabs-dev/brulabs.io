@@ -50,13 +50,14 @@ function seeded(seed: number) {
   };
 }
 
+// Earthy tones chosen to sit next to the brand orange, cream and ink.
 const BOARD_AGENTS = [
   { name: "Ollie", color: "#e9652e", text: "#1d211f" },
-  { name: "Amora", color: "#8e2f5a", text: "#f6efdf" },
-  { name: "Bolt", color: "#f2b233", text: "#1d211f" },
-  { name: "Maia", color: "#2f6f5e", text: "#f6efdf" },
+  { name: "Amora", color: "#9c3b3b", text: "#f6efdf" },
+  { name: "Bolt", color: "#d9a441", text: "#1d211f" },
+  { name: "Maia", color: "#6b7b4b", text: "#f6efdf" },
   { name: "Ted", color: "#1d211f", text: "#f6efdf" },
-  { name: "Simon", color: "#4a64c8", text: "#f6efdf" },
+  { name: "Simon", color: "#3d6670", text: "#f6efdf" },
 ];
 const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
 
