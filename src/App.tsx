@@ -616,19 +616,17 @@ const hills: Hill[] = [
   { color: "#c94e1c", seconds: 80, base: 246, waves: [[30, 1, 3.4], [16, 4, 1.1]] },
   { color: "#a92f1a", seconds: 56, base: 296, waves: [[22, 3, 0.9], [9, 7, 2.6]] },
 ];
-const CARAVAN_HILL = 2;
-const CARAVAN_SECONDS = 70;
 
 // The office scene is laid out in the units of the source drawing (1440 x 987).
 const OFFICE = { width: 1440, height: 987 };
 const MUG = { width: 103, height: 92, home: { x: 394, y: 326 }, floor: { x: 640, y: 890 } };
 const CHAIR = { width: 658, left: 693, away: 90, tucked: -50, grab: { x: 250, y: 520 } };
-const TIDY_SECONDS = 18;
+const TIDY_SECONDS = 10.5;
 const ease = (t: number) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
 const span = (time: number, from: number, to: number) => ease((time - from) / (to - from));
 const mix = (from: number, to: number, t: number) => from + (to - from) * t;
 
-// Drifting hills with the six agent cursors crossing them in single file, and an office being tidied in the corner.
+// Drifting hills, and an office in the corner that one cursor tidies when the visitor arrives.
 function Landscape() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const pieces = { desk: findMedia(footerFiles, "mesa"), mug: findMedia(footerFiles, "caneca"), chair: findMedia(footerFiles, "cadeira") };
@@ -638,35 +636,28 @@ function Landscape() {
     const scene = sceneRef.current;
     if (!scene) return;
     const layers = Array.from(scene.querySelectorAll<SVGPathElement>(".hills path"));
-    const walkers = Array.from(scene.querySelectorAll<HTMLElement>(".walker"));
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const ridge = hills[CARAVAN_HILL];
     const office = scene.querySelector<HTMLElement>(".office");
     const mug = scene.querySelector<HTMLElement>(".office-mug");
     const chair = scene.querySelector<HTMLElement>(".office-chair");
     const hand = scene.querySelector<HTMLElement>(".office-hand");
     let frame = 0;
     let onScreen = true;
+    let startedAt: number | null = null;
 
-    // One cursor tidies up on a loop: mug from the floor to the desk, then the chair pushed in.
-    const tidy = (time: number | null) => {
+    // One cursor tidies up, once: mug from the floor to the desk, then the chair pushed in.
+    // t is seconds since the visitor reached the footer; from TIDY_SECONDS on the office stays tidy.
+    const tidy = (t: number) => {
       if (!office || !mug || !chair || !hand) return;
       const unit = office.clientWidth / OFFICE.width;
-      const t = time === null ? 12 : time % TIDY_SECONDS;
       const mugHome = { x: MUG.home.x + MUG.width / 2, y: MUG.home.y + MUG.height / 2 };
       const mugFloor = { x: MUG.floor.x + MUG.width / 2, y: MUG.floor.y + MUG.height / 2 };
       const carry = span(t, 2.3, 4.3);
-      const push = span(t, 6.5, 8.5);
-      const reset = t > 17.3;
-      const mugAt = reset
-        ? mugFloor
-        : { x: mix(mugFloor.x, mugHome.x, carry), y: mix(mugFloor.y, mugHome.y, carry) - Math.sin(carry * Math.PI) * 130 };
-      const mugTurn = reset ? -90 : mix(-90, 0, span(t, 2.3, 3.6));
-      const chairShift = reset ? CHAIR.away : mix(CHAIR.away, CHAIR.tucked, push);
-      const visible = t < 16.8 ? 1 : reset ? span(t, 17.4, 17.9) : 1 - span(t, 16.8, 17.3);
+      const chairShift = mix(CHAIR.away, CHAIR.tucked, span(t, 6.5, 8.5));
+      const mugAt = { x: mix(mugFloor.x, mugHome.x, carry), y: mix(mugFloor.y, mugHome.y, carry) - Math.sin(carry * Math.PI) * 130 };
+      const mugTurn = mix(-90, 0, span(t, 2.3, 3.6));
       mug.style.transform = `translate(${((mugAt.x - mugHome.x) * unit).toFixed(1)}px, ${((mugAt.y - mugHome.y) * unit).toFixed(1)}px) rotate(${mugTurn.toFixed(1)}deg)`;
       chair.style.transform = `translateX(${(chairShift * unit).toFixed(1)}px)`;
-      mug.style.opacity = chair.style.opacity = visible.toFixed(2);
 
       const chairGrab = { x: CHAIR.left + CHAIR.grab.x, y: CHAIR.grab.y };
       let at = { x: 200, y: 560 };
@@ -677,42 +668,39 @@ function Landscape() {
       else { const go = span(t, 8.5, 10); at = { x: mix(chairGrab.x + CHAIR.tucked, 1000, go), y: mix(chairGrab.y, 240, go) }; }
       const holding = (t > 2 && t < 4.5) || (t > 6.2 && t < 8.7);
       hand.style.transform = `translate(${(at.x * unit).toFixed(1)}px, ${(at.y * unit).toFixed(1)}px) scale(${holding ? 0.84 : 1})`;
-      hand.style.opacity = time === null ? "0" : (span(t, 0.5, 1) * (1 - span(t, 9.6, 10.4))).toFixed(2);
+      hand.style.opacity = (span(t, 0.5, 1) * (1 - span(t, 9.6, 10.4))).toFixed(2);
     };
 
-    const place = (seconds: number) => {
-      const width = scene.clientWidth;
-      const height = scene.clientHeight;
-      const drift = hills.map((hill) => ((seconds / hill.seconds) * 1440) % 1440);
-      layers.forEach((layer, index) => { layer.style.transform = `translateX(${-drift[index]}px)`; });
-      const gap = Math.max(74, Math.min(96, width / 7));
-      const track = width + gap * walkers.length + 80;
-      walkers.forEach((walker, index) => {
-        const x = ((seconds / CARAVAN_SECONDS) * track + index * gap) % track - gap * walkers.length;
-        const at = (x / width) * 1440 + drift[CARAVAN_HILL];
-        const y = (hillHeight(ridge, at) / 360) * height;
-        const slope = ((hillHeight(ridge, at + 12) - hillHeight(ridge, at - 12)) / 24) * (height / 360) / (width / 1440);
-        walker.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${Math.max(-12, Math.min(12, Math.atan(slope) * 28)).toFixed(1)}deg)`;
-      });
+    const drift = (seconds: number) => {
+      layers.forEach((layer, index) => { layer.style.transform = `translateX(${-(((seconds / hills[index].seconds) * 1440) % 1440)}px)`; });
     };
 
     if (reduced) {
-      place(24);
-      tidy(null);
-      const onResize = () => { place(24); tidy(null); };
+      drift(24);
+      tidy(TIDY_SECONDS);
+      const onResize = () => tidy(TIDY_SECONDS);
       window.addEventListener("resize", onResize);
       return () => window.removeEventListener("resize", onResize);
     }
+
+    tidy(0);
     const visibility = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
     visibility.observe(scene);
+    // The tidy-up starts the first time most of the office is on screen, and never replays.
+    const arrival = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      arrival.disconnect();
+      startedAt = performance.now();
+    }, { threshold: 0.6 });
+    if (office) arrival.observe(office);
     const tick = (time: number) => {
       frame = window.requestAnimationFrame(tick);
       if (!onScreen) return;
-      place(time / 1000 + 24);
-      tidy(time / 1000);
+      drift(time / 1000 + 24);
+      tidy(startedAt === null ? 0 : Math.min(TIDY_SECONDS, (time - startedAt) / 1000));
     };
     frame = window.requestAnimationFrame(tick);
-    return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); };
+    return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); arrival.disconnect(); };
   }, []);
 
   return (
@@ -730,11 +718,6 @@ function Landscape() {
           {hills.map((hill) => <path key={hill.color} d={hillPath(hill)} fill={hill.color} />)}
         </g>
       </svg>
-      {AGENT_COLORS.map((color) => (
-        <span className="walker" key={color}>
-          <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-        </span>
-      ))}
       {hasOffice && (
         <div className="office">
           <img className="office-desk" src={pieces.desk} alt="" />

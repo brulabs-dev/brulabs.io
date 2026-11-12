@@ -283,9 +283,6 @@ p { color: var(--ink-soft); line-height: 1.6; }
 .office-mug { top: 33.029%; left: 27.361%; width: 7.153%; }
 .office-hand { position: absolute; top: 0; left: 0; width: 0; height: 0; opacity: 0; transition: scale .15s; will-change: transform; }
 .office-hand svg { position: absolute; top: -3px; left: -3px; width: clamp(20px, 2.2vw, 30px); height: auto; overflow: visible; filter: drop-shadow(0 4px 5px rgb(86 30 8 / 35%)); }
-/* Each walker is anchored by the tip of its cursor, which rides the ridge of a hill. */
-.walker { position: absolute; top: 0; left: 0; width: 0; height: 0; will-change: transform; }
-.walker svg { position: absolute; bottom: -4px; left: -4px; width: clamp(24px, 2.6vw, 34px); height: auto; overflow: visible; filter: drop-shadow(0 4px 5px rgb(86 30 8 / 35%)); transform: translateY(-18%); }
 
 /* Footer */
 .footer { display: flex; min-height: 120px; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding-block: 28px; }
