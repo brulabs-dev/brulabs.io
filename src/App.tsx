@@ -5,10 +5,8 @@ import { tallyUrl } from "./tally";
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 // Optional media, picked up by file name when present:
-//   src/assets/demos/{teo,ada,lia}.{mp4,webm}   screen recordings for the examples
-//   src/assets/method/{1,2,3,4}.{webp,png,jpg}  illustrations for the method tiles
+//   src/assets/demos/{ollie,amora,maia}.{mp4,webm}   screen recordings for the examples
 const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
-const methodFiles = import.meta.glob<string>("./assets/method/*.{webp,png,jpg}", { eager: true, query: "?url", import: "default" });
 const findMedia = (files: Record<string, string>, name: string) => {
   const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
   return key ? files[key] : undefined;
@@ -53,11 +51,12 @@ function seeded(seed: number) {
 }
 
 const BOARD_AGENTS = [
-  { name: "Ada", color: "#e9652e", text: "#1d211f" },
-  { name: "Téo", color: "#1d211f", text: "#f6efdf" },
-  { name: "Lia", color: "#a92f1a", text: "#f6efdf" },
-  { name: "Nico", color: "#f49a6c", text: "#1d211f" },
-  { name: "Bia", color: "#5a5d58", text: "#f6efdf" },
+  { name: "Ollie", color: "#e9652e", text: "#1d211f" },
+  { name: "Amora", color: "#8e2f5a", text: "#f6efdf" },
+  { name: "Bolt", color: "#f2b233", text: "#1d211f" },
+  { name: "Maia", color: "#2f6f5e", text: "#f6efdf" },
+  { name: "Ted", color: "#1d211f", text: "#f6efdf" },
+  { name: "Simon", color: "#4a64c8", text: "#f6efdf" },
 ];
 const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
 
@@ -144,7 +143,7 @@ function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphEl
       const count = narrow ? 3 : BOARD_AGENTS.length;
       const entries = [
         { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: width * 0.6, y: height + 40 },
-        { x: width + 40, y: height * 0.75 }, { x: width * 0.35, y: height + 40 },
+        { x: width + 40, y: height * 0.75 }, { x: width * 0.35, y: height + 40 }, { x: width * 0.85, y: -40 },
       ];
       if (canHover) entries[0] = { x: width * 0.74, y: height * 0.6 };
       agents = entries.slice(0, count).map((entry, index) => ({ ...entry, target: null, clickAt: 0, pressedAt: -9999, enterAt: index * 1100 }));
@@ -400,36 +399,36 @@ type Run = { agent: string; file: string; label: string; steps: RunStep[] };
 // Illustrative runs, not client cases.
 const runs: Run[] = [
   {
-    agent: "Téo",
-    file: "teo",
+    agent: "Ollie",
+    file: "ollie",
     label: "Pedido por e-mail",
     steps: [
       { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
-      { time: "08:12", text: "O Téo lê o pedido e confere o estoque no sistema." },
+      { time: "08:12", text: "O Ollie lê o pedido e confere o estoque no sistema." },
       { time: "08:13", text: "Lança o pedido e manda um resumo no WhatsApp do gerente." },
-      { time: "08:13", text: "Um item está com preço fora da tabela. O Téo não lança e pede aprovação.", human: true },
+      { time: "08:13", text: "Um item está com preço fora da tabela. O Ollie não lança e pede aprovação.", human: true },
     ],
   },
   {
-    agent: "Ada",
-    file: "ada",
+    agent: "Amora",
+    file: "amora",
     label: "Atendimento no WhatsApp",
     steps: [
       { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
-      { time: "14:03", text: "A Ada busca o pedido no sistema e acha o código de rastreio." },
+      { time: "14:03", text: "A Amora busca o pedido no sistema e acha o código de rastreio." },
       { time: "14:04", text: "Responde ao cliente com o prazo e o link." },
-      { time: "14:20", text: "O cliente reclama de um item quebrado. A Ada passa a conversa pra uma pessoa.", human: true },
+      { time: "14:20", text: "O cliente reclama de um item quebrado. A Amora passa a conversa pra uma pessoa.", human: true },
     ],
   },
   {
-    agent: "Lia",
-    file: "lia",
+    agent: "Maia",
+    file: "maia",
     label: "Relatório da semana",
     steps: [
-      { time: "07:00", text: "Segunda cedo, a Lia abre as planilhas de vendas e o financeiro." },
+      { time: "07:00", text: "Segunda cedo, a Maia abre as planilhas de vendas e o financeiro." },
       { time: "07:01", text: "Junta os números da semana e compara com a anterior." },
       { time: "07:02", text: "Envia o relatório por e-mail pra diretoria." },
-      { time: "07:02", text: "Uma filial não lançou os dados. A Lia avisa o responsável em vez de chutar.", human: true },
+      { time: "07:02", text: "Uma filial não lançou os dados. A Maia avisa o responsável em vez de chutar.", human: true },
     ],
   },
 ];
@@ -558,13 +557,16 @@ function Method() {
       </div>
       <ol className="method-steps">
         {steps.map((step, index) => {
-          const image = findMedia(methodFiles, String(index + 1));
+          const agent = BOARD_AGENTS[index];
           return (
             <li key={step.title}>
-              <span aria-hidden="true">{index === steps.length - 1 ? <Check size={22} weight="bold" /> : String(index + 1).padStart(2, "0")}</span>
-              {image && <img src={image} alt="" loading="lazy" />}
+              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
               <h3>{step.title}</h3>
               <p>{step.description}</p>
+              <div className="method-agent" aria-hidden="true">
+                <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
+                <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
+              </div>
             </li>
           );
         })}
