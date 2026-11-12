@@ -6,7 +6,9 @@ const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 // Optional media, picked up by file name when present:
 //   src/assets/demos/{ollie,amora,maia}.{mp4,webm}   screen recordings for the examples
+//   src/assets/footer/mesa.{png,webp}                 the empty desk in the footer landscape
 const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
+const footerFiles = import.meta.glob<string>("./assets/footer/*.{png,webp}", { eager: true, query: "?url", import: "default" });
 const findMedia = (files: Record<string, string>, name: string) => {
   const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
   return key ? files[key] : undefined;
@@ -598,32 +600,78 @@ function About() {
   );
 }
 
+type Wave = [amplitude: number, cycles: number, phase: number];
+type Hill = { color: string; seconds: number; base: number; waves: Wave[] };
+
+// Height of a hill at x, in the 1440 x 360 space the landscape is drawn in.
+const hillHeight = (hill: Hill, x: number) =>
+  hill.waves.reduce((sum, [amplitude, cycles, phase]) => sum + amplitude * Math.sin((x / 1440) * Math.PI * 2 * cycles + phase), hill.base);
+
 // One period of rolling hills, drawn twice so the layer can loop sideways without a seam.
-function hillPath(base: number, waves: [number, number, number][]) {
+function hillPath(hill: Hill) {
   const points: string[] = [];
-  for (let x = 0; x <= 2880; x += 24) {
-    const y = waves.reduce((sum, [amplitude, cycles, phase]) => sum + amplitude * Math.sin((x / 1440) * Math.PI * 2 * cycles + phase), base);
-    points.push(`${x},${y.toFixed(1)}`);
-  }
+  for (let x = 0; x <= 2880; x += 24) points.push(`${x},${hillHeight(hill, x).toFixed(1)}`);
   return `M0,360 L${points.join(" L")} L2880,360 Z`;
 }
 
-const hills = [
-  { color: "#f7b48f", seconds: 150, path: hillPath(150, [[34, 1, 0.4], [14, 3, 1.9]]) },
-  { color: "#f07740", seconds: 110, path: hillPath(196, [[40, 2, 2.2], [12, 5, 0.3]]) },
-  { color: "#c94e1c", seconds: 80, path: hillPath(246, [[30, 1, 3.4], [16, 4, 1.1]]) },
-  { color: "#a92f1a", seconds: 56, path: hillPath(296, [[22, 3, 0.9], [9, 7, 2.6]]) },
+const hills: Hill[] = [
+  { color: "#f7b48f", seconds: 150, base: 150, waves: [[34, 1, 0.4], [14, 3, 1.9]] },
+  { color: "#f07740", seconds: 110, base: 196, waves: [[40, 2, 2.2], [12, 5, 0.3]] },
+  { color: "#c94e1c", seconds: 80, base: 246, waves: [[30, 1, 3.4], [16, 4, 1.1]] },
+  { color: "#a92f1a", seconds: 56, base: 296, waves: [[22, 3, 0.9], [9, 7, 2.6]] },
 ];
+const CARAVAN_HILL = 2;
+const CARAVAN_SECONDS = 70;
 
+// Drifting hills with the six agents crossing them in single file, and an empty desk in the corner.
 function Landscape() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const desk = findMedia(footerFiles, "mesa");
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const layers = Array.from(scene.querySelectorAll<SVGPathElement>(".hills path"));
+    const walkers = Array.from(scene.querySelectorAll<HTMLElement>(".walker"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const ridge = hills[CARAVAN_HILL];
+    let frame = 0;
+    let onScreen = true;
+
+    const place = (seconds: number) => {
+      const width = scene.clientWidth;
+      const height = scene.clientHeight;
+      const drift = hills.map((hill) => ((seconds / hill.seconds) * 1440) % 1440);
+      layers.forEach((layer, index) => { layer.style.transform = `translateX(${-drift[index]}px)`; });
+      const gap = Math.max(74, Math.min(96, width / 7));
+      const track = width + gap * walkers.length + 80;
+      walkers.forEach((walker, index) => {
+        const x = ((seconds / CARAVAN_SECONDS) * track + index * gap) % track - gap * walkers.length;
+        const at = (x / width) * 1440 + drift[CARAVAN_HILL];
+        const y = (hillHeight(ridge, at) / 360) * height;
+        const slope = ((hillHeight(ridge, at + 12) - hillHeight(ridge, at - 12)) / 24) * (height / 360) / (width / 1440);
+        walker.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${Math.max(-12, Math.min(12, Math.atan(slope) * 28)).toFixed(1)}deg)`;
+      });
+    };
+
+    if (reduced) {
+      place(24);
+      const onResize = () => place(24);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+    const visibility = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+    visibility.observe(scene);
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (onScreen) place(time / 1000 + 24);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); };
+  }, []);
+
   return (
-    <div className="landscape" aria-hidden="true">
-      {BOARD_AGENTS.slice(0, 3).map((agent, index) => (
-        <span className={`sky-agent sky-agent-${index + 1}`} key={agent.name}>
-          <svg viewBox="-2 -2 18 24" width="20" height="27"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-          <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
-        </span>
-      ))}
+    <div className="landscape" ref={sceneRef} aria-hidden="true">
       <svg className="hills" viewBox="0 0 1440 360" preserveAspectRatio="none">
         <defs>
           <filter id="hill-grain" x="0" y="0" width="100%" height="100%">
@@ -634,29 +682,16 @@ function Landscape() {
           </filter>
         </defs>
         <g filter="url(#hill-grain)">
-          {hills.map((hill) => (
-            <path key={hill.color} d={hill.path} fill={hill.color} style={{ animationDuration: `${hill.seconds}s` }} />
-          ))}
+          {hills.map((hill) => <path key={hill.color} d={hillPath(hill)} fill={hill.color} />)}
         </g>
       </svg>
-      <svg className="desk" viewBox="0 0 200 150">
-        <rect x="20" y="92" width="112" height="5" />
-        <rect x="24" y="97" width="4" height="53" />
-        <rect x="124" y="97" width="4" height="53" />
-        <rect x="44" y="50" width="5" height="37" rx="2" />
-        <rect x="46" y="86" width="3" height="6" />
-        <rect x="37" y="89" width="20" height="3" />
-        <rect x="176" y="68" width="6" height="48" rx="3" />
-        <rect x="140" y="112" width="42" height="6" rx="3" />
-        <rect x="158" y="118" width="4" height="22" />
-        <rect x="142" y="140" width="38" height="5" rx="2" />
-        <circle cx="146" cy="52" r="11" />
-        <path d="M151 63 C169 66 175 90 172 113 L146 113 C147 97 141 79 138 70 Z" />
-        <path d="M143 71 L111 89 L112 95 L147 85 Z" />
-        <rect x="118" y="105" width="50" height="11" rx="5" />
-        <rect x="116" y="108" width="10" height="40" rx="4" />
-        <rect x="105" y="143" width="21" height="7" rx="3" />
-      </svg>
+      {BOARD_AGENTS.map((agent) => (
+        <span className="walker" key={agent.name}>
+          <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
+          <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+        </span>
+      ))}
+      {desk && <img className="desk" src={desk} alt="" loading="lazy" />}
       <div className="ground" />
     </div>
   );
