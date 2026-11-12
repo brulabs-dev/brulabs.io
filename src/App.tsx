@@ -568,7 +568,6 @@ function Method() {
               <p>{step.description}</p>
               <div className="method-agent" aria-hidden="true">
                 <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={agent.color} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
-                <b style={{ background: agent.color, color: agent.text }}>{agent.name}</b>
               </div>
             </li>
           );
