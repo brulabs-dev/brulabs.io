@@ -622,6 +622,8 @@ const OFFICE = { width: 1440, height: 987 };
 const MUG = { width: 103, height: 92, home: { x: 394, y: 326 }, floor: { x: 640, y: 890 } };
 const CHAIR = { width: 658, left: 693, away: 90, tucked: -50, grab: { x: 250, y: 520 } };
 const TIDY_SECONDS = 10.5;
+// How much faster than the timeline below the scene actually plays.
+const TIDY_SPEED = 1.7;
 const ease = (t: number) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
 const span = (time: number, from: number, to: number) => ease((time - from) / (to - from));
 const mix = (from: number, to: number, t: number) => from + (to - from) * t;
@@ -701,7 +703,7 @@ function Landscape() {
       frame = window.requestAnimationFrame(tick);
       if (!onScreen) return;
       drift(time / 1000 + 24);
-      tidy(startedAt === null ? 0 : Math.min(TIDY_SECONDS, (time - startedAt) / 1000));
+      tidy(startedAt === null ? 0 : Math.min(TIDY_SECONDS, ((time - startedAt) / 1000) * TIDY_SPEED));
     };
     frame = window.requestAnimationFrame(tick);
     return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); arrival.disconnect(); };
