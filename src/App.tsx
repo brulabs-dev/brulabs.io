@@ -574,80 +574,9 @@ function Method() {
   );
 }
 
-// Where the founder note starts, a little off its place, and how long the cursor takes to set it straight.
-const NOTE_START = { x: 46, y: 34, turn: -4.5 };
-const NOTE_SECONDS = 4.6;
-
-// The note sits crooked until most of it is on screen; then a cursor comes in from the
-// right edge of the screen, grabs the corner, drags the note into place and leaves.
 function About() {
-  const sectionRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const section = sectionRef.current;
-    const note = section?.querySelector<HTMLElement>(".about-note");
-    const hand = section?.querySelector<HTMLElement>(".about-hand");
-    if (!section || !note || !hand) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frame = 0;
-    let startedAt: number | null = null;
-
-    // t is seconds since the note came into view; from NOTE_SECONDS on it stays in place.
-    const place = (t: number) => {
-      const shrink = Math.min(1, note.offsetWidth / 900);
-      const settle = span(t, 1.7, 3.1);
-      const shift = { x: NOTE_START.x * shrink * (1 - settle), y: NOTE_START.y * shrink * (1 - settle) };
-      const turn = NOTE_START.turn * (1 - settle);
-      note.style.transform = `translate(${shift.x.toFixed(1)}px, ${shift.y.toFixed(1)}px) rotate(${turn.toFixed(2)}deg)`;
-
-      // The grab point is near the note's top right corner, carried along by the same move and turn.
-      const centre = { x: note.offsetLeft + note.offsetWidth / 2, y: note.offsetTop + note.offsetHeight / 2 };
-      const local = { x: note.offsetWidth * 0.4, y: -note.offsetHeight * 0.36 };
-      const angle = (turn * Math.PI) / 180;
-      const grab = {
-        x: centre.x + shift.x + local.x * Math.cos(angle) - local.y * Math.sin(angle),
-        y: centre.y + shift.y + local.x * Math.sin(angle) + local.y * Math.cos(angle),
-      };
-      const edge = window.innerWidth - section.getBoundingClientRect().left + 60;
-      const enter = { x: edge, y: grab.y + 140 };
-      const leave = { x: edge, y: grab.y - 120 };
-      let at = enter;
-      if (t < 1.5) { const go = span(t, 0.1, 1.5); at = { x: mix(enter.x, grab.x, go), y: mix(enter.y, grab.y, go) }; }
-      else if (t < 3.2) at = grab;
-      else { const go = span(t, 3.2, 4.5); at = { x: mix(grab.x, leave.x, go), y: mix(grab.y, leave.y, go) }; }
-      const holding = t > 1.45 && t < 3.25;
-      hand.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) scale(${holding ? 0.84 : 1})`;
-      hand.style.visibility = "visible";
-    };
-
-    if (reduced || !("IntersectionObserver" in window)) {
-      place(NOTE_SECONDS);
-      return;
-    }
-
-    place(0);
-    const arrival = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      arrival.disconnect();
-      startedAt = performance.now();
-      frame = window.requestAnimationFrame(tick);
-    }, { threshold: 0.7 });
-    const tick = (time: number) => {
-      const t = Math.min(NOTE_SECONDS, (time - (startedAt ?? time)) / 1000);
-      place(t);
-      if (t < NOTE_SECONDS) frame = window.requestAnimationFrame(tick);
-    };
-    const onResize = () => { if (startedAt === null) place(0); };
-    arrival.observe(note);
-    window.addEventListener("resize", onResize);
-    return () => { window.cancelAnimationFrame(frame); arrival.disconnect(); window.removeEventListener("resize", onResize); };
-  }, []);
-
   return (
-    <section className="about section-shell" id="sobre" aria-labelledby="about-title" ref={sectionRef}>
-      <span className="about-hand" aria-hidden="true">
-        <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[0]} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-      </span>
+    <section className="about section-shell" id="sobre" aria-labelledby="about-title">
       <div className="about-note">
         <img src={asset("assets/brand/bruno.webp")} alt="Bruno, da BruLabs" width={720} height={720} loading="lazy" />
         <div>
