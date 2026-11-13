@@ -646,7 +646,7 @@ function Landscape() {
     let startedAt: number | null = null;
 
     // One cursor tidies up, once: mug from the floor to the desk, then the chair pushed in.
-    // t is seconds since the visitor reached the footer; from TIDY_SECONDS on the office stays tidy.
+    // t is seconds since the visitor reached the footer; from TIDY_SECONDS on the office stays tidy and the cursor is gone.
     const tidy = (t: number) => {
       if (!office || !mug || !chair || !hand) return;
       const unit = office.clientWidth / OFFICE.width;
@@ -659,16 +659,20 @@ function Landscape() {
       mug.style.transform = `translate(${((mugAt.x - mugHome.x) * unit).toFixed(1)}px, ${((mugAt.y - mugHome.y) * unit).toFixed(1)}px) rotate(${mugTurn.toFixed(1)}deg)`;
       chair.style.transform = `translateX(${(chairShift * unit).toFixed(1)}px)`;
 
+      // The cursor waits just past the left edge of the landscape and leaves past the right one.
+      const margin = 60 / unit;
+      const enter = { x: -office.offsetLeft / unit - margin, y: 560 };
+      const leave = { x: ((office.offsetParent?.clientWidth ?? 0) - office.offsetLeft) / unit + margin, y: 240 };
       const chairGrab = { x: CHAIR.left + CHAIR.grab.x, y: CHAIR.grab.y };
-      let at = { x: 200, y: 560 };
-      if (t < 2.3) at = { x: mix(200, mugFloor.x, span(t, 0.5, 2)), y: mix(560, mugFloor.y, span(t, 0.5, 2)) };
+      let at = enter;
+      if (t < 2.3) { const go = span(t, 0.1, 2.1); at = { x: mix(enter.x, mugFloor.x, go), y: mix(enter.y, mugFloor.y, go) }; }
       else if (t < 4.6) at = mugAt;
       else if (t < 6.5) { const go = span(t, 4.6, 6.2); at = { x: mix(mugHome.x, chairGrab.x + CHAIR.away, go), y: mix(mugHome.y, chairGrab.y, go) }; }
       else if (t < 8.5) at = { x: chairGrab.x + chairShift, y: chairGrab.y };
-      else { const go = span(t, 8.5, 10); at = { x: mix(chairGrab.x + CHAIR.tucked, 1000, go), y: mix(chairGrab.y, 240, go) }; }
+      else { const go = span(t, 8.6, 10.4); at = { x: mix(chairGrab.x + CHAIR.tucked, leave.x, go), y: mix(chairGrab.y, leave.y, go) }; }
       const holding = (t > 2 && t < 4.5) || (t > 6.2 && t < 8.7);
       hand.style.transform = `translate(${(at.x * unit).toFixed(1)}px, ${(at.y * unit).toFixed(1)}px) scale(${holding ? 0.84 : 1})`;
-      hand.style.opacity = (span(t, 0.5, 1) * (1 - span(t, 9.6, 10.4))).toFixed(2);
+      hand.style.visibility = "visible";
     };
 
     const drift = (seconds: number) => {
