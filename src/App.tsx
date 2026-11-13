@@ -1,463 +1,768 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUpRight, List, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowRight, Check, HandPalm, InstagramLogo, LinkedinLogo, Plus, WhatsappLogo, X } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
-const sitePath = (path = "") => `${import.meta.env.BASE_URL}${path}`;
-const asset = sitePath;
+const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
-type RevealProps = {
-  children: React.ReactNode;
-  className?: string;
+// Optional media, picked up by file name when present:
+//   src/assets/demos/{pedido,atendimento,relatorio}.{mp4,webm}  screen recordings for the examples
+//   src/assets/footer/{mesa,caneca,cadeira}.{png,webp} the office pieces in the footer landscape
+const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
+const footerFiles = import.meta.glob<string>("./assets/footer/*.{png,webp}", { eager: true, query: "?url", import: "default" });
+const findMedia = (files: Record<string, string>, name: string) => {
+  const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
+  return key ? files[key] : undefined;
 };
+const EMAIL = "bruno@brulabs.io";
+const INSTAGRAM_URL = "https://www.instagram.com/bru.labs/";
 
-function Reveal({ children, className = "" }: RevealProps) {
-  return <div className={className}>{children}</div>;
-}
+// TODO: placeholders. Replace both with the real values before publishing.
+const WHATSAPP_NUMBER = "5548900000000";
+const LINKEDIN_URL = "https://www.linkedin.com/in/SEU-PERFIL";
+const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Oi, Bruno! Vim pelo site da BruLabs.")}`;
 
-function ArrowMark({ external = false }: { external?: boolean }) {
-  return (
-    <span className="arrow-mark" aria-hidden="true">
-      {external ? <ArrowUpRight size={16} weight="bold" /> : <ArrowRight size={16} weight="bold" />}
-    </span>
-  );
-}
+const navLinks = [
+  ["O que é um agente", "#agentes"],
+  ["Como trabalhamos", "#metodo"],
+  ["Quem faz", "#sobre"],
+];
 
 function Header() {
-  const [open, setOpen] = useState(false);
-  const links = [
-    ["Trabalho", "#trabalho"],
-    ["Serviços", "#servicos"],
-    ["Processo", "#processo"],
-    ["Treinamentos", "#treinamentos"],
-    ["Sobre", "#sobre"],
-  ];
-
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, []);
-
   return (
     <header className="site-header section-shell">
       <a href="#topo" className="brand" aria-label="BruLabs, início">
         <img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" />
       </a>
-      <nav className="desktop-nav" aria-label="Navegação principal">
-        {links.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
+      <nav className="site-nav" aria-label="Navegação principal">
+        {navLinks.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
       </nav>
-      <a className="button button-small desktop-cta" href={tallyUrl({ page: "home", cta: "header" })}>
-        Conversar sobre o projeto <ArrowMark />
-      </a>
-      <button
-        className="menu-button"
-        type="button"
-        aria-expanded={open}
-        aria-controls="mobile-nav"
-        aria-label={open ? "Fechar menu" : "Abrir menu"}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {open ? <X size={23} weight="light" /> : <List size={23} weight="light" />}
-      </button>
-      {open && (
-        <nav className="mobile-nav" id="mobile-nav" aria-label="Navegação móvel">
-          {links.map(([label, href]) => <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>)}
-          <a className="button" href={tallyUrl({ page: "home", cta: "header-mobile" })}>
-            Conversar sobre o projeto <ArrowMark />
-          </a>
-        </nav>
-      )}
+      <a className="button button-small" href="#contato">Falar com a BruLabs</a>
     </header>
   );
 }
 
-function MpnProductScene() {
+// Small seeded generator so the board has the same shape on every load.
+function seeded(seed: number) {
+  let state = seed;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// One colour per agent cursor: earthy tones chosen to sit next to the brand orange, cream and ink.
+const AGENT_COLORS = ["#e9652e", "#9c3b3b", "#d9a441", "#6b7b4b", "#1d211f", "#3d6670"];
+const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
+
+type BoardCell = { x: number; y: number; state: 0 | 1 | 2; since: number; taken: boolean };
+type BoardAgent = { x: number; y: number; target: BoardCell | null; clickAt: number; pressedAt: number; enterAt: number; leftSide: boolean };
+
+// A board of small pending tasks. It sits still until the visitor moves over it;
+// then agent cursors come in from the edges and clear tasks alongside the visitor.
+function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphElement | null> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const host = canvas?.parentElement;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !host || !context) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const canHover = window.matchMedia("(hover: hover)").matches;
+    const random = seeded(41);
+    const pointerShape = new Path2D(POINTER_SHAPE);
+
+    let cells: BoardCell[] = [];
+    let agents: BoardAgent[] = [];
+    let tile = 40;
+    let pitch = 44;
+    let width = 0;
+    let height = 0;
+    let pointer: { x: number; y: number } | null = null;
+    let active = false;
+    let refilling = false;
+    let lastRefill = 0;
+    let lastTime = 0;
+    let frame = 0;
+    let onScreen = true;
+    let byAgents = 0;
+    let byVisitor = 0;
+
+    const report = () => {
+      const counter = counterRef.current;
+      if (!counter) return;
+      const total = byAgents + byVisitor;
+      counter.textContent = total === 0
+        ? (canHover ? "Passe o mouse no quadro" : "Toque numa tarefa")
+        : `${byAgents} tarefas feitas por agentes · ${byVisitor} por você`;
+    };
+
+    const build = () => {
+      const box = host.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      width = box.width;
+      height = box.height;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const narrow = width < 700;
+      tile = narrow ? 30 : 40;
+      pitch = tile + 4;
+      const columns = Math.floor((width + 4) / pitch);
+      const rows = Math.floor((height + 4) / pitch);
+      const offsetX = (width - (columns * pitch - 4)) / 2;
+      const copy = host.querySelector<HTMLElement>(".hero-copy");
+      const copyBottom = copy ? copy.getBoundingClientRect().bottom - box.top : height * 0.5;
+      const shape = seeded(17);
+      let drift = 0;
+      cells = [];
+      for (let column = 0; column < columns; column += 1) {
+        const t = columns > 1 ? column / (columns - 1) : 0;
+        drift = (drift + (shape() - 0.5) * 0.14) * 0.82;
+        let level: number;
+        if (narrow) {
+          level = Math.floor((height - copyBottom - 22) / pitch) - Math.floor(shape() * 2.4);
+        } else {
+          const left = 0.17 * Math.pow(Math.max(0, 1 - t / 0.5), 1.1);
+          const right = 0.96 * Math.pow(Math.max(0, (t - 0.44) / 0.56), 0.9);
+          level = Math.min(rows - 2, Math.round((Math.max(left, right) + drift) * rows));
+        }
+        for (let depth = 0; depth < level && depth < rows; depth += 1) {
+          if (level - depth <= 2 && shape() > 0.62) continue;
+          const state = shape() > 0.1 ? 1 : 0;
+          cells.push({ x: offsetX + column * pitch, y: height - (depth + 1) * pitch, state, since: -9999, taken: false });
+        }
+      }
+      const count = narrow ? 3 : AGENT_COLORS.length;
+      const entries = [
+        { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: -40, y: height * 0.86 },
+        { x: width + 40, y: height * 0.75 }, { x: width * 0.22, y: height + 40 }, { x: width * 0.85, y: -40 },
+      ];
+      if (canHover) entries[0] = { x: width * 0.74, y: height * 0.6 };
+      // On wide screens two agents keep to the left half, so the strip under the text is not left alone.
+      agents = entries.slice(0, count).map((entry, index) => ({ ...entry, target: null, clickAt: 0, pressedAt: -9999, enterAt: index * 1100, leftSide: !narrow && (index === 2 || index === 4) }));
+    };
+
+    const complete = (cell: BoardCell, time: number, visitor: boolean) => {
+      cell.state = 2;
+      cell.since = time;
+      cell.taken = false;
+      if (visitor) byVisitor += 1; else byAgents += 1;
+      report();
+    };
+
+    const cellAt = (x: number, y: number) => cells.find((cell) => x >= cell.x && x <= cell.x + tile && y >= cell.y && y <= cell.y + tile);
+
+    const pickTarget = (agent: BoardAgent) => {
+      const free = cells.filter((cell) => cell.state === 1 && !cell.taken);
+      const half = width * 0.5;
+      const own = free.filter((cell) => (cell.x < half) === agent.leftSide);
+      const open = own.length > 0 ? own : free;
+      if (open.length === 0) return null;
+      open.sort((first, second) => Math.hypot(first.x - agent.x, first.y - agent.y) - Math.hypot(second.x - agent.x, second.y - agent.y));
+      const choice = open[Math.floor(random() * Math.min(7, open.length))];
+      choice.taken = true;
+      return choice;
+    };
+
+    let startedAt = 0;
+    const update = (time: number, delta: number) => {
+      for (const cell of cells) {
+        if (cell.state === 2 && time - cell.since > 2400) { cell.state = 0; cell.since = time; }
+      }
+      if (!active) return;
+      const pending = cells.reduce((sum, cell) => sum + (cell.state === 1 ? 1 : 0), 0);
+      if (pending < cells.length * 0.3) refilling = true;
+      if (pending > cells.length * 0.86) refilling = false;
+      if (refilling && time - lastRefill > 60) {
+        lastRefill = time;
+        const empty = cells.filter((cell) => cell.state === 0);
+        const next = empty[Math.floor(random() * empty.length)];
+        if (next) { next.state = 1; next.since = time; }
+      }
+      for (const agent of agents) {
+        if (time - startedAt < agent.enterAt) continue;
+        if (!agent.target || agent.target.state !== 1) {
+          if (agent.target) agent.target.taken = false;
+          agent.target = pickTarget(agent);
+          agent.clickAt = 0;
+        }
+        if (!agent.target) continue;
+        const goalX = agent.target.x + tile * 0.42;
+        const goalY = agent.target.y + tile * 0.4;
+        const distance = Math.hypot(goalX - agent.x, goalY - agent.y);
+        if (distance > 2.5) {
+          const step = Math.min(distance, Math.min(760, 140 + distance * 5.5) * delta);
+          agent.x += ((goalX - agent.x) / distance) * step;
+          agent.y += ((goalY - agent.y) / distance) * step;
+        } else if (agent.clickAt === 0) {
+          agent.clickAt = time + 130 + random() * 300;
+        } else if (time >= agent.clickAt) {
+          agent.pressedAt = time;
+          complete(agent.target, time, false);
+          agent.target = null;
+        }
+      }
+    };
+
+    const roundedTile = (x: number, y: number, size: number) => {
+      context.beginPath();
+      context.roundRect(x, y, size, size, size * 0.16);
+      context.fill();
+    };
+
+    const drawPointer = (x: number, y: number, color: string, pressed: number) => {
+      const scale = (tile / 40) * (1.25 - 0.18 * pressed);
+      if (pressed > 0) {
+        context.strokeStyle = color;
+        context.globalAlpha = pressed * 0.7;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(x, y, 6 + (1 - pressed) * 22, 0, Math.PI * 2);
+        context.stroke();
+        context.globalAlpha = 1;
+      }
+      context.save();
+      context.translate(x, y);
+      context.scale(scale, scale);
+      context.shadowColor = "rgb(29 33 31 / 30%)";
+      context.shadowBlur = 8;
+      context.shadowOffsetY = 3;
+      context.fillStyle = color;
+      context.fill(pointerShape);
+      context.shadowColor = "transparent";
+      context.lineJoin = "round";
+      context.lineWidth = 1.5;
+      context.strokeStyle = "#fffaf0";
+      context.stroke(pointerShape);
+      context.restore();
+    };
+
+    const draw = (time: number) => {
+      context.clearRect(0, 0, width, height);
+      const hovered = pointer ? cellAt(pointer.x, pointer.y) : undefined;
+      for (const cell of cells) {
+        const age = time - cell.since;
+        if (cell.state === 0) {
+          context.fillStyle = "rgb(29 33 31 / 9%)";
+          roundedTile(cell.x + tile * 0.4, cell.y + tile * 0.4, tile * 0.2);
+          continue;
+        }
+        const grow = reduced ? 1 : Math.min(1, age / 220);
+        const size = tile * (0.55 + 0.45 * (1 - Math.pow(1 - grow, 3)));
+        const inset = (tile - size) / 2;
+        if (cell.state === 1) {
+          context.fillStyle = cell === hovered ? "#474e49" : "#1d211f";
+          roundedTile(cell.x + inset, cell.y + inset, size);
+          continue;
+        }
+        context.globalAlpha = Math.max(0, Math.min(1, (2400 - age) / 400));
+        context.fillStyle = "#e9652e";
+        roundedTile(cell.x + inset, cell.y + inset, size);
+        context.strokeStyle = "#fffaf0";
+        context.lineWidth = tile * 0.085;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.beginPath();
+        context.moveTo(cell.x + tile * 0.3, cell.y + tile * 0.52);
+        context.lineTo(cell.x + tile * 0.44, cell.y + tile * 0.66);
+        context.lineTo(cell.x + tile * 0.71, cell.y + tile * 0.36);
+        context.stroke();
+        context.globalAlpha = 1;
+      }
+      if (!active && canHover) {
+        // Before the visitor arrives, one agent waits on the board without doing anything.
+        drawPointer(width * 0.74, height * 0.6, AGENT_COLORS[0], 0);
+      }
+      agents.forEach((agent, index) => {
+        if (!active || time - startedAt < agent.enterAt) return;
+        const pressed = Math.max(0, 1 - (time - agent.pressedAt) / 260);
+        drawPointer(agent.x, agent.y, AGENT_COLORS[index], pressed);
+      });
+    };
+
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (!onScreen) { lastTime = time; return; }
+      const delta = Math.min(0.05, (time - (lastTime || time)) / 1000);
+      lastTime = time;
+      update(time, delta);
+      draw(time);
+    };
+
+    const activate = () => {
+      if (active || reduced) return;
+      active = true;
+      startedAt = performance.now();
+    };
+
+    const position = (event: PointerEvent) => {
+      const box = host.getBoundingClientRect();
+      return { x: event.clientX - box.left, y: event.clientY - box.top };
+    };
+    const onMove = (event: PointerEvent) => {
+      pointer = position(event);
+      if (event.pointerType === "mouse") activate();
+      if (reduced) draw(performance.now());
+    };
+    const onLeave = () => { pointer = null; if (reduced) draw(performance.now()); };
+    const onDown = (event: PointerEvent) => {
+      if ((event.target as HTMLElement).closest("a, button")) return;
+      const spot = position(event);
+      const cell = cellAt(spot.x, spot.y);
+      activate();
+      if (cell && cell.state === 1) complete(cell, performance.now(), true);
+      if (reduced) draw(performance.now());
+    };
+    const onResize = () => { build(); draw(performance.now()); };
+
+    build();
+    report();
+    draw(0);
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(host);
+    const visibility = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      // Touch screens have no hover, so the agents start once the board is in view.
+      if (!canHover && entry.intersectionRatio > 0.5) activate();
+    }, { threshold: [0, 0.5] });
+    visibility.observe(host);
+    host.addEventListener("pointermove", onMove);
+    host.addEventListener("pointerleave", onLeave);
+    host.addEventListener("pointerdown", onDown);
+    if (!reduced) frame = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      visibility.disconnect();
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
+      host.removeEventListener("pointerdown", onDown);
+    };
+  }, [counterRef]);
+
+  return <canvas className="task-board" ref={canvasRef} aria-hidden="true" />;
+}
+
+function Hero() {
+  const counterRef = useRef<HTMLParagraphElement>(null);
+
   return (
-    <div className="product-scene" role="img" aria-label="Representação do produto Manda Pra Nutri no WhatsApp e no painel de acompanhamento">
-      <img className="product-statue" src={asset("assets/art/case/mpn-statue.webp")} alt="" aria-hidden="true" />
-
-      <div className="dashboard-shell" aria-hidden="true">
-        <div className="dashboard-window">
-          <div className="window-bar">
-            <span /><span /><span />
-            <b>app.mandapranutri.com.br</b>
+    <section className="hero section-shell" id="topo" aria-labelledby="hero-title">
+      <div className="hero-scene">
+        <TaskBoard counterRef={counterRef} />
+        <div className="hero-copy">
+          <h1 id="hero-title">
+            Agentes de IA para empresas. <em>Feitos sob medida.</em>
+          </h1>
+          <p>
+            A BruLabs é uma startup de software de Florianópolis. Construímos agentes que assumem tarefas repetitivas da operação, ligados às ferramentas que a empresa já usa.
+          </p>
+          <div className="hero-actions">
+            <a className="button" href="#contato">Falar com a BruLabs <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
+            <a className="hero-link" href="#agentes">Ver um agente trabalhando <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
           </div>
-          <div className="dashboard-layout">
-            <aside className="dashboard-sidebar">
-              <strong>manda pra nutri</strong>
-              <span className="is-active">Visão geral</span>
-              <span>Diário alimentar</span>
-              <span>Evolução</span>
-              <i>MPN</i>
-            </aside>
-            <div className="dashboard-main">
-              <div className="dashboard-heading">
-                <div><small>Seu acompanhamento</small><strong>Olá, Ana</strong></div>
-                <span>Esta semana</span>
-              </div>
-              <div className="dashboard-grid">
-                <section className="dashboard-card dashboard-chart">
-                  <small>Evolução semanal</small>
-                  <div className="chart-layout">
-                    <div className="chart-ring"><span>7 dias</span></div>
-                    <div className="chart-bars">
-                      {[48, 72, 58, 84, 66, 91, 76].map((height, index) => (
-                        <i key={height} style={{ "--bar": `${height}%` } as React.CSSProperties}><b /><span>{"DSTQQSS"[index]}</span></i>
-                      ))}
-                    </div>
+        </div>
+        <p className="hero-count" ref={counterRef} aria-hidden="true" />
+      </div>
+    </section>
+  );
+}
+
+type RunStep = { time: string; text: string; human?: boolean };
+type Run = { file: string; label: string; steps: RunStep[] };
+
+// Illustrative runs, not client cases.
+const runs: Run[] = [
+  {
+    file: "pedido",
+    label: "Pedido por e-mail",
+    steps: [
+      { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
+      { time: "08:12", text: "O agente lê o pedido e confere o estoque no sistema." },
+      { time: "08:13", text: "Lança o pedido e manda um resumo no WhatsApp do gerente." },
+      { time: "08:13", text: "Um item está com preço fora da tabela. O bot não lança e pede aprovação.", human: true },
+    ],
+  },
+  {
+    file: "atendimento",
+    label: "Atendimento no WhatsApp",
+    steps: [
+      { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
+      { time: "14:03", text: "A IA busca o pedido no sistema e acha o código de rastreio." },
+      { time: "14:04", text: "Responde ao cliente com o prazo e o link." },
+      { time: "14:20", text: "O cliente reclama de um item quebrado. O agente passa a conversa pra uma pessoa.", human: true },
+    ],
+  },
+  {
+    file: "relatorio",
+    label: "Relatório da semana",
+    steps: [
+      { time: "07:00", text: "Segunda cedo, o bot abre as planilhas de vendas e o financeiro." },
+      { time: "07:01", text: "Junta os números da semana e compara com a anterior." },
+      { time: "07:02", text: "Envia o relatório por e-mail pra diretoria." },
+      { time: "07:02", text: "Uma filial não lançou os dados. A IA avisa o responsável em vez de chutar.", human: true },
+    ],
+  },
+];
+
+const STEP_MS = 1300;
+const NEXT_RUN_MS = 4200;
+
+function AgentDemo() {
+  const [runIndex, setRunIndex] = useState(0);
+  const [shown, setShown] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [autoAdvance, setAutoAdvance] = useState(true);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const run = runs[runIndex];
+  const video = findMedia(demoFiles, run.file);
+
+  // Start the first time the panel is on screen; show everything at once under reduced motion.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) {
+      setShown(runs[0].steps.length);
+      setAutoAdvance(false);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      setPlaying(true);
+    }, { threshold: 0.35 });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!playing) return;
+    if (shown < run.steps.length) {
+      const timer = window.setTimeout(() => setShown((count) => count + 1), shown === 0 ? 500 : STEP_MS);
+      return () => window.clearTimeout(timer);
+    }
+    if (!autoAdvance) return;
+    const timer = window.setTimeout(() => {
+      setRunIndex((index) => (index + 1) % runs.length);
+      setShown(0);
+    }, NEXT_RUN_MS);
+    return () => window.clearTimeout(timer);
+  }, [playing, shown, run, autoAdvance]);
+
+  const choose = (index: number) => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setAutoAdvance(false);
+    setRunIndex(index);
+    setShown(reduced ? runs[index].steps.length : 0);
+    setPlaying(!reduced);
+  };
+
+  return (
+    <section className="demo section-shell" id="agentes" aria-labelledby="demo-title">
+      <div className="section-heading">
+        <span>O que é um agente</span>
+        <h2 id="demo-title">Um software que assume uma tarefa do começo ao fim.</h2>
+        <p>Ele usa as ferramentas que a empresa já tem e chama uma pessoa quando não sabe o que fazer. Veja três tarefas acontecendo:</p>
+      </div>
+      <div className="demo-panel" ref={panelRef}>
+        <div className="demo-tabs" role="group" aria-label="Escolher a tarefa de exemplo">
+          {runs.map((item, index) => (
+            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}>{item.label}</button>
+          ))}
+        </div>
+        <div className={`demo-body${video ? " has-video" : ""}`} key={runIndex}>
+          {video && (
+            <figure className="demo-screen">
+              <figcaption>
+                <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" />
+              </figcaption>
+              <video src={video} autoPlay muted loop playsInline preload="metadata" aria-label={`Gravação de tela: ${run.label}`} />
+            </figure>
+          )}
+          <ol className="demo-log">
+            {run.steps.map((step, index) => (
+              <li key={step.text} className={`${video || index < shown ? "is-shown" : ""}${step.human ? " is-human" : ""}`}>
+                <time>{step.time}</time>
+                <span className="demo-mark" aria-hidden="true">{step.human ? <HandPalm size={18} weight="fill" /> : <Check size={16} weight="bold" />}</span>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div className="demo-foot">
+          <span>{video ? "Gravação de tela" : "Exemplo ilustrativo"}</span>
+          <button type="button" onClick={() => choose(runIndex)}><ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Repetir</button>
+        </div>
+      </div>
+      <p className="demo-note">E quando um agente não é a resposta, a gente avisa.</p>
+    </section>
+  );
+}
+
+const steps = [
+  {
+    title: "Escolha da tarefa",
+    description: "Começamos por uma tarefa só, repetitiva e bem definida.",
+    detail: "Uma boa primeira tarefa se repete toda semana, segue regras claras e hoje toma tempo de alguém.",
+  },
+  {
+    title: "Agente sob medida",
+    description: "Construímos ligado às ferramentas que a empresa já usa.",
+    detail: "O agente trabalha dentro do que já existe: e-mail, WhatsApp, planilhas e o sistema de gestão. Ninguém troca de ferramenta.",
+  },
+  {
+    title: "Teste com a equipe",
+    description: "Com casos reais, antes de entrar na rotina.",
+    detail: "Quem faz a tarefa hoje acompanha o agente em casos reais e aponta onde ele erra. Só depois ele entra na rotina.",
+  },
+  {
+    title: "Ajuste em uso",
+    description: "Acompanhamos e corrigimos conforme o agente trabalha.",
+    detail: "Tarefas mudam. Seguimos acompanhando o agente em operação e ajustamos quando a regra muda.",
+  },
+];
+// Text colour that reads on each agent colour, in the same order as AGENT_COLORS.
+const AGENT_TEXT = ["#1d211f", "#f6efdf", "#1d211f", "#f6efdf", "#f6efdf", "#f6efdf"];
+
+function Method() {
+  const [flipped, setFlipped] = useState<number | null>(null);
+
+  return (
+    <section className="method section-shell" id="metodo" aria-labelledby="method-title">
+      <div className="section-heading">
+        <span>Como trabalhamos</span>
+        <h2 id="method-title">Uma tarefa de cada vez.</h2>
+        <p>Clique num cartão para ver mais.</p>
+      </div>
+      <ol className="method-steps">
+        {steps.map((step, index) => {
+          const isFlipped = flipped === index;
+          return (
+            <li key={step.title} className={isFlipped ? "is-flipped" : undefined}>
+              <div className="card-inner">
+                <div className="card-face card-front" inert={isFlipped} onClick={() => setFlipped(index)}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                  <div className="method-agent" aria-hidden="true">
+                    <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[index]} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
                   </div>
-                </section>
-                <section className="dashboard-card dashboard-summary">
-                  <small>Hoje</small>
-                  <strong>Registros do dia</strong>
-                  <div><span>Café da manhã</span><b>registrado</b></div>
-                  <div><span>Almoço</span><b>registrado</b></div>
-                  <div><span>Lanche</span><b>adicionar</b></div>
-                </section>
-                <section className="dashboard-card dashboard-diary">
-                  <div><small>Diário alimentar</small><strong>Últimas refeições</strong></div>
-                  <span>Ver diário completo</span>
-                </section>
+                  <button type="button" className="card-toggle" aria-label={`Ver mais sobre: ${step.title}`}><Plus size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
+                <div
+                  className="card-face card-back"
+                  inert={!isFlipped}
+                  style={{ background: AGENT_COLORS[index], color: AGENT_TEXT[index] }}
+                  onClick={(event) => { if (!(event.target as HTMLElement).closest("a")) setFlipped(null); }}
+                >
+                  <h3>{step.title}</h3>
+                  <p>{step.detail}</p>
+                  <a className="text-link" href="#contato">Falar sobre uma tarefa <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
+                  <button type="button" className="card-toggle" aria-label="Voltar o cartão"><X size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
               </div>
-            </div>
-          </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function About() {
+  return (
+    <section className="about section-shell" id="sobre" aria-labelledby="about-title">
+      <div className="about-note">
+        <img src={asset("assets/brand/bruno.webp")} alt="Bruno, da BruLabs" width={720} height={720} loading="lazy" />
+        <div>
+          <span>Quem faz</span>
+          <h2 id="about-title">Oi, eu sou o Bruno.</h2>
+          <p>
+            Sou engenheiro e fundei a BruLabs em Florianópolis. A empresa é pequena de propósito: quem conversa com você no começo é quem constrói o agente depois.
+          </p>
+          <ul className="about-facts">
+            <li>Engenharia pela UFRGS</li>
+            <li>Especialização em IA</li>
+            <li>MBA pela USP/Esalq</li>
+          </ul>
         </div>
       </div>
+    </section>
+  );
+}
 
-      <div className="phone-shell" aria-hidden="true">
-        <div className="phone-screen">
-          <div className="phone-status"><span>9:41</span><span>● ● ●</span></div>
-          <div className="chat-header"><b>mpn</b><div><strong>Manda pra Nutri</strong><small>online</small></div></div>
-          <div className="chat-body">
-            <div className="chat-message chat-message-user">
-              <img src={asset("assets/case/mpn/meal-capture.webp")} alt="" />
-              <span>Meu almoço de hoje</span>
-            </div>
-            <div className="chat-message chat-message-bot">
-              <p>Refeição recebida. Já organizei a análise e o registro no seu diário.</p>
-              <span>Ver detalhes</span>
-            </div>
-          </div>
-          <div className="chat-input"><span>Mensagem</span><b>↑</b></div>
+type Wave = [amplitude: number, cycles: number, phase: number];
+type Hill = { color: string; seconds: number; base: number; waves: Wave[] };
+
+// Height of a hill at x, in the 1440 x 360 space the landscape is drawn in.
+const hillHeight = (hill: Hill, x: number) =>
+  hill.waves.reduce((sum, [amplitude, cycles, phase]) => sum + amplitude * Math.sin((x / 1440) * Math.PI * 2 * cycles + phase), hill.base);
+
+// One period of rolling hills, drawn twice so the layer can loop sideways without a seam.
+function hillPath(hill: Hill) {
+  const points: string[] = [];
+  for (let x = 0; x <= 2880; x += 24) points.push(`${x},${hillHeight(hill, x).toFixed(1)}`);
+  return `M0,360 L${points.join(" L")} L2880,360 Z`;
+}
+
+const hills: Hill[] = [
+  { color: "#f7b48f", seconds: 150, base: 150, waves: [[34, 1, 0.4], [14, 3, 1.9]] },
+  { color: "#f07740", seconds: 110, base: 196, waves: [[40, 2, 2.2], [12, 5, 0.3]] },
+  { color: "#c94e1c", seconds: 80, base: 246, waves: [[30, 1, 3.4], [16, 4, 1.1]] },
+  { color: "#a92f1a", seconds: 56, base: 296, waves: [[22, 3, 0.9], [9, 7, 2.6]] },
+];
+
+// The office scene is laid out in the units of the source drawing (1440 x 987).
+const OFFICE = { width: 1440, height: 987 };
+const MUG = { width: 103, height: 92, home: { x: 394, y: 326 }, floor: { x: 640, y: 890 } };
+const CHAIR = { width: 658, left: 693, away: 90, tucked: -50, grab: { x: 250, y: 520 } };
+const TIDY_SECONDS = 10.5;
+// How much faster than the timeline below the scene actually plays.
+const TIDY_SPEED = 1.7;
+const ease = (t: number) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
+const span = (time: number, from: number, to: number) => ease((time - from) / (to - from));
+const mix = (from: number, to: number, t: number) => from + (to - from) * t;
+
+// Drifting hills, and an office in the corner that one cursor tidies when the visitor arrives.
+function Landscape() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const pieces = { desk: findMedia(footerFiles, "mesa"), mug: findMedia(footerFiles, "caneca"), chair: findMedia(footerFiles, "cadeira") };
+  const hasOffice = Boolean(pieces.desk && pieces.mug && pieces.chair);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const layers = Array.from(scene.querySelectorAll<SVGPathElement>(".hills path"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const office = scene.querySelector<HTMLElement>(".office");
+    const mug = scene.querySelector<HTMLElement>(".office-mug");
+    const chair = scene.querySelector<HTMLElement>(".office-chair");
+    const hand = scene.querySelector<HTMLElement>(".office-hand");
+    let frame = 0;
+    let onScreen = true;
+    let startedAt: number | null = null;
+
+    // One cursor tidies up, once: mug from the floor to the desk, then the chair pushed in.
+    // t is seconds since the visitor reached the footer; from TIDY_SECONDS on the office stays tidy and the cursor is gone.
+    const tidy = (t: number) => {
+      if (!office || !mug || !chair || !hand) return;
+      const unit = office.clientWidth / OFFICE.width;
+      const mugHome = { x: MUG.home.x + MUG.width / 2, y: MUG.home.y + MUG.height / 2 };
+      const mugFloor = { x: MUG.floor.x + MUG.width / 2, y: MUG.floor.y + MUG.height / 2 };
+      const carry = span(t, 2.3, 4.3);
+      const chairShift = mix(CHAIR.away, CHAIR.tucked, span(t, 6.5, 8.5));
+      const mugAt = { x: mix(mugFloor.x, mugHome.x, carry), y: mix(mugFloor.y, mugHome.y, carry) - Math.sin(carry * Math.PI) * 130 };
+      const mugTurn = mix(-90, 0, span(t, 2.3, 3.6));
+      mug.style.transform = `translate(${((mugAt.x - mugHome.x) * unit).toFixed(1)}px, ${((mugAt.y - mugHome.y) * unit).toFixed(1)}px) rotate(${mugTurn.toFixed(1)}deg)`;
+      chair.style.transform = `translateX(${(chairShift * unit).toFixed(1)}px)`;
+
+      // The cursor waits just past the left edge of the landscape and leaves past the right one.
+      const margin = 60 / unit;
+      const enter = { x: -office.offsetLeft / unit - margin, y: 560 };
+      const leave = { x: ((office.offsetParent?.clientWidth ?? 0) - office.offsetLeft) / unit + margin, y: 240 };
+      const chairGrab = { x: CHAIR.left + CHAIR.grab.x, y: CHAIR.grab.y };
+      let at = enter;
+      if (t < 2.3) { const go = span(t, 0.1, 2.1); at = { x: mix(enter.x, mugFloor.x, go), y: mix(enter.y, mugFloor.y, go) }; }
+      else if (t < 4.6) at = mugAt;
+      else if (t < 6.5) { const go = span(t, 4.6, 6.2); at = { x: mix(mugHome.x, chairGrab.x + CHAIR.away, go), y: mix(mugHome.y, chairGrab.y, go) }; }
+      else if (t < 8.5) at = { x: chairGrab.x + chairShift, y: chairGrab.y };
+      else { const go = span(t, 8.6, 10.4); at = { x: mix(chairGrab.x + CHAIR.tucked, leave.x, go), y: mix(chairGrab.y, leave.y, go) }; }
+      const holding = (t > 2 && t < 4.5) || (t > 6.2 && t < 8.7);
+      hand.style.transform = `translate(${(at.x * unit).toFixed(1)}px, ${(at.y * unit).toFixed(1)}px) scale(${holding ? 0.84 : 1})`;
+      hand.style.visibility = "visible";
+    };
+
+    const drift = (seconds: number) => {
+      layers.forEach((layer, index) => { layer.style.transform = `translateX(${-(((seconds / hills[index].seconds) * 1440) % 1440)}px)`; });
+    };
+
+    if (reduced) {
+      drift(24);
+      tidy(TIDY_SECONDS);
+      const onResize = () => tidy(TIDY_SECONDS);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+
+    tidy(0);
+    const visibility = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+    visibility.observe(scene);
+    // The tidy-up starts the first time most of the office is on screen, and never replays.
+    const arrival = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      arrival.disconnect();
+      startedAt = performance.now();
+    }, { threshold: 0.6 });
+    if (office) arrival.observe(office);
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (!onScreen) return;
+      drift(time / 1000 + 24);
+      tidy(startedAt === null ? 0 : Math.min(TIDY_SECONDS, ((time - startedAt) / 1000) * TIDY_SPEED));
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); arrival.disconnect(); };
+  }, []);
+
+  return (
+    <div className="landscape" ref={sceneRef} aria-hidden="true">
+      <svg className="hills" viewBox="0 0 1440 360" preserveAspectRatio="none">
+        <defs>
+          <filter id="hill-grain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch" result="noise" />
+            <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 .96  0 0 0 0 .88  0 0 0 .5 -.12" />
+            <feComposite operator="in" in2="SourceGraphic" />
+            <feBlend in2="SourceGraphic" mode="soft-light" />
+          </filter>
+        </defs>
+        <g filter="url(#hill-grain)">
+          {hills.map((hill) => <path key={hill.color} d={hillPath(hill)} fill={hill.color} />)}
+        </g>
+      </svg>
+      {hasOffice && (
+        <div className="office">
+          <img className="office-desk" src={pieces.desk} alt="" />
+          <img className="office-chair" src={pieces.chair} alt="" />
+          <img className="office-mug" src={pieces.mug} alt="" />
+          <span className="office-hand">
+            <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[0]} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+          </span>
         </div>
-      </div>
-
-      <div className="product-note note-input">foto · áudio · texto</div>
-      <div className="product-note note-output">conversa → histórico</div>
+      )}
+      <div className="ground" />
     </div>
   );
 }
 
-function Hero() {
+function Closing() {
   return (
-    <section className="hero section-shell" id="topo">
-      <section className="hero-scene" aria-labelledby="hero-title">
-          <div className="hero-rings" aria-hidden="true" />
-          <div className="hero-grid-lines" aria-hidden="true" />
-          <div className="hero-scene-copy">
-            <h1 id="hero-title">
-              A operação precisa funcionar. <em>A ferramenta vem depois.</em>
-            </h1>
-            <p>
-              Produtos digitais, sistemas internos e automações. A BruLabs começa pelo contexto e só então decide se o caminho é usar, integrar ou construir.
-            </p>
-            <div className="hero-actions">
-              <a className="button button-light" href={tallyUrl({ page: "home", cta: "hero" })}>Conversar sobre o projeto <ArrowMark /></a>
-              <a className="hero-text-link" href="#trabalho">Ver um projeto <ArrowRight size={17} weight="bold" /></a>
-            </div>
+    <footer className="closing" id="contato" aria-labelledby="contact-title">
+      <div className="section-shell closing-inner">
+        <h2 id="contact-title">Que tarefa você passaria para um agente?</h2>
+        <div className="contact-actions">
+          <a className="button button-dark" href={whatsappUrl} target="_blank" rel="noreferrer">
+            <WhatsappLogo size={20} weight="fill" aria-hidden="true" /> Chamar no WhatsApp
+          </a>
+          <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+        </div>
+        <div className="closing-meta">
+          <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
+          <div>
+            <span>Florianópolis, SC</span>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer"><InstagramLogo size={18} weight="fill" aria-hidden="true" /> Instagram</a>
+            <a href={LINKEDIN_URL} target="_blank" rel="noreferrer"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /> LinkedIn</a>
+            <a href={tallyUrl({ page: "home", cta: "contato" })}>Formulário</a>
+            <a href={asset("privacidade/")}>Privacidade</a>
           </div>
-
-          <div className="hero-scene-art" aria-hidden="true">
-            <img className="hero-statue" src={asset("assets/art/hero/statue-modern.webp")} alt="" />
-          </div>
-
-          <span className="hero-corner hero-corner-a" aria-hidden="true" />
-          <span className="hero-corner hero-corner-b" aria-hidden="true" />
-      </section>
-    </section>
-  );
-}
-
-function SelectedWork() {
-  return (
-    <section className="selected-work" id="trabalho" aria-labelledby="mpn-title">
-      <div className="section-shell selected-work-inner">
-        <h2>Um projeto em operação</h2>
-        <article className="selected-project">
-          <div className="selected-project-visual"><MpnProductScene /></div>
-          <div className="selected-project-copy">
-            <div><span>Produto digital · saúde</span><h3 id="mpn-title">Manda Pra Nutri</h3></div>
-            <div>
-              <p>Acompanhamento nutricional pelo WhatsApp, com o histórico organizado num painel para a nutricionista.</p>
-              <p>Saiu de um experimento no ChatGPT, passou pelo Telegram e chegou ao WhatsApp. A BruLabs levou produto, experiência e implementação até o uso.</p>
-              <a href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver o produto <ArrowMark external /></a>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-  );
-}
-
-const capabilities = [
-  {
-    number: "01",
-    title: "Produtos digitais",
-    description: "Plataformas web, produtos com IA e primeiras versões que um cliente, parceiro ou mercado já consegue usar.",
-    examples: "estratégia · protótipo · desenvolvimento · lançamento",
-    image: "assets/solutions/digital-product-cinema-v2.webp",
-    path: "product" as const,
-  },
-  {
-    number: "02",
-    title: "Sistemas internos",
-    description: "Painéis, backoffices e portais para quando planilha e ferramenta genérica já não dão conta do processo.",
-    examples: "operação · dados · permissões · acompanhamento",
-    image: "assets/solutions/custom-system-v2.webp",
-    path: "process" as const,
-  },
-  {
-    number: "03",
-    title: "Integrações e automações",
-    description: "Ligar formulários, planilhas, e-mail, CRM e Microsoft 365 para parar de copiar dado de um lado para o outro.",
-    examples: "integrações · automação · IA aplicada · suporte",
-    image: "assets/solutions/automation-v2.webp",
-    path: "process" as const,
-  },
-];
-
-function ServicePanel({
-  capability,
-  index,
-  onOpen,
-}: {
-  capability: (typeof capabilities)[number];
-  index: number;
-  onOpen: () => void;
-}) {
-  return (
-    <article className={`service-panel service-panel-${index + 1}`} data-openness="0">
-      <button
-        type="button"
-        aria-expanded={false}
-        aria-controls={`service-panel-${index}`}
-        onClick={onOpen}
-      >
-        <h3>{capability.title}</h3>
-        <span>{capability.number}</span>
-      </button>
-      <div className="service-panel-collapse" aria-hidden="true">
-        <div className="service-panel-clip" id={`service-panel-${index}`}>
-          <div className="service-panel-body">
-            <div>
-              <p>{capability.description}</p>
-              <small>{capability.examples}</small>
-              <a
-                href={tallyUrl({ path: capability.path, solution: capability.title, page: "home", cta: "servico" })}
-                tabIndex={-1}
-              >
-                Ver se faz sentido <ArrowMark />
-              </a>
-            </div>
-            <figure><img src={asset(capability.image)} alt="" loading="lazy" /></figure>
-          </div>
+          <span>© 2026 BruLabs</span>
         </div>
       </div>
-    </article>
-  );
-}
-
-function Capabilities() {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const openServiceRef = useRef<(index: number) => void>(() => undefined);
-
-  useEffect(() => {
-    const automaticMotion = window.matchMedia("(min-width: 901px) and (prefers-reduced-motion: no-preference)");
-    let frame = 0;
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const panels = Array.from(stage.querySelectorAll<HTMLElement>(".service-panel"));
-
-    const applyOpenness = (values: number[]) => {
-      panels.forEach((panel, index) => {
-        const openness = values[index] ?? 0;
-        const isOpen = openness > 0.01;
-        const collapse = panel.querySelector<HTMLElement>(".service-panel-collapse");
-        const body = panel.querySelector<HTMLElement>(".service-panel-body");
-        const button = panel.querySelector<HTMLButtonElement>("button");
-        const link = panel.querySelector<HTMLAnchorElement>(".service-panel-body a");
-        if (!collapse || !body || !button) return;
-
-        panel.dataset.openness = String(openness);
-        panel.classList.toggle("is-open", isOpen);
-        collapse.style.gridTemplateRows = `${openness}fr`;
-        body.style.opacity = String(openness);
-        button.setAttribute("aria-expanded", String(isOpen));
-        collapse.setAttribute("aria-hidden", String(!isOpen));
-        if (link) link.tabIndex = openness > 0.9 ? 0 : -1;
-      });
-    };
-
-    const updateFromScroll = () => {
-      frame = 0;
-      if (!automaticMotion.matches) return;
-
-      const activationLine = window.innerHeight * .67;
-      const revealDistance = Math.max(130, window.innerHeight * .18);
-      const next = panels.map((panel) => {
-        const distance = activationLine - panel.getBoundingClientRect().top;
-        return Math.min(1, Math.max(0, distance / revealDistance));
-      });
-      applyOpenness(next);
-    };
-
-    const requestUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateFromScroll);
-    };
-
-    const configureMotion = () => {
-      stage.classList.toggle("is-scroll-driven", automaticMotion.matches);
-      if (automaticMotion.matches) updateFromScroll();
-      else applyOpenness([1, 0, 0]);
-    };
-
-    openServiceRef.current = (index) => {
-      if (automaticMotion.matches) {
-        applyOpenness(capabilities.map((_, itemIndex) => itemIndex <= index ? 1 : 0));
-      } else {
-        applyOpenness(capabilities.map((_, itemIndex) => itemIndex === index ? 1 : 0));
-      }
-    };
-
-    configureMotion();
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
-    automaticMotion.addEventListener("change", configureMotion);
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
-      automaticMotion.removeEventListener("change", configureMotion);
-    };
-  }, []);
-
-  return (
-    <section className="services-section section-shell" id="servicos" aria-labelledby="services-title">
-      <div className="cuberto-heading">
-        <span>O que fazemos</span>
-        <div><h2 id="services-title">Primeiro o problema. Depois a ferramenta.</h2><p>Antes de propor stack, a gente mapeia a operação, o que já foi tentado e quem usa o processo.</p></div>
-      </div>
-      <div className="service-panels-stage" ref={stageRef}>
-        <div className="service-panels">
-          {capabilities.map((capability, index) => (
-            <ServicePanel
-              key={capability.number}
-              capability={capability}
-              index={index}
-              onOpen={() => openServiceRef.current(index)}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const processSteps = [
-  {
-    number: "01",
-    title: "Entender",
-    subtitle: "O que existe e o que falta",
-    description: "Levantamos a necessidade, o processo atual, quem participa e o que já foi tentado.",
-    image: "assets/art/method/diagnosis.webp",
-  },
-  {
-    number: "02",
-    title: "Escolher",
-    subtitle: "Usar, integrar ou construir",
-    description: "Comparamos ferramenta pronta, integração e desenvolvimento sob medida antes de fechar o caminho.",
-    image: "assets/art/method/direction.webp",
-  },
-  {
-    number: "03",
-    title: "Colocar em uso",
-    subtitle: "Testar e colocar na rotina",
-    description: "Desenvolvemos, testamos e acompanhamos a entrada da solução no dia a dia da equipe.",
-    image: "assets/art/method/construction.webp",
-  },
-];
-
-function Process() {
-  return (
-    <section className="workflow-section" id="processo" aria-labelledby="process-title">
-      <div className="section-shell workflow-inner">
-        <div className="workflow-heading"><h2 id="process-title">Como trabalhamos</h2><p>Três etapas, nesta ordem: entender o contexto, escolher o caminho e colocar em uso.</p></div>
-        <div className="workflow-grid">
-          {processSteps.map((step) => (
-            <article className="workflow-card" key={step.number}>
-              <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
-              <div><span>{step.number} · {step.subtitle}</span><h3>{step.title}</h3><p>{step.description}</p></div>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Founder() {
-  return (
-    <section className="about-section section-shell" id="sobre" aria-labelledby="founder-title">
-      <div className="cuberto-heading about-heading"><span>Sobre</span><div><h2 id="founder-title">Quem faz o diagnóstico também implementa.</h2><p>Não tem fila de atendimento no meio. O Bruno acompanha da primeira conversa até o que entra em uso.</p></div></div>
-      <div className="about-grid">
-        <figure className="about-photo"><img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, fundador da BruLabs" loading="lazy" /></figure>
-        <article className="about-card about-card-main"><span>Fundador</span><h3>Trabalho direto com quem conhece o processo.</h3></article>
-        <article className="about-card"><span>Formação</span><strong>Engenharia · UFRGS<br />Especialização em IA<br />MBA · USP/Esalq</strong></article>
-        <article className="about-card about-card-wide"><span>Como atua</span><strong>Investigar, priorizar, implementar e acompanhar.</strong></article>
-      </div>
-    </section>
-  );
-}
-
-function Training() {
-  return (
-    <section className="training-feature section-shell" id="treinamentos" aria-labelledby="training-title">
-      <a className="training-strip" href={sitePath("treinamentos/")}>
-        <figure><img src={asset("assets/art/training/teacher.webp")} alt="" loading="lazy" /></figure>
-        <div className="training-strip-title">
-          <span>Também fazemos</span>
-          <h2 id="training-title">Treinamentos de IA e automação</h2>
-        </div>
-        <p>Workshop prático, nas ferramentas e situações que a equipe já usa.</p>
-        <span className="training-strip-cta">Ver treinamentos <ArrowMark /></span>
-      </a>
-    </section>
-  );
-}
-
-function FinalCta() {
-  return (
-    <section className="final-cta">
-      <Reveal className="section-shell final-cta-inner">
-        <span>Contato</span>
-        <h2>Se algo na operação está travado, começa por aí.</h2>
-        <a className="button button-dark" href={tallyUrl({ page: "home", cta: "final" })}>
-          Conversar sobre o projeto <ArrowMark />
-        </a>
-      </Reveal>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="footer section-shell">
-      <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><a href="#trabalho">Trabalho</a><a href="#servicos">Serviços</a><a href={sitePath("privacidade/")}>Privacidade</a></div>
-      <span>© 2026 BruLabs</span>
+      <Landscape />
     </footer>
   );
 }
@@ -469,14 +774,11 @@ export function App() {
       <Header />
       <main id="conteudo">
         <Hero />
-        <Capabilities />
-        <SelectedWork />
-        <Process />
-        <Founder />
-        <Training />
-        <FinalCta />
+        <AgentDemo />
+        <About />
+        <Method />
       </main>
-      <Footer />
+      <Closing />
     </div>
   );
 }

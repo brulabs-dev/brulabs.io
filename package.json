@@ -10,10 +10,8 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "latest",
-    "motion": "latest",
     "react": "latest",
-    "react-dom": "latest",
-    "react-icons": "^5.7.0"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",
