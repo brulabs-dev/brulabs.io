@@ -230,7 +230,11 @@ p { color: var(--ink-soft); line-height: 1.6; }
 .card-front:hover .method-agent { transform: translate(-12px, -14px); }
 
 /* About: a note on cream paper */
-.about { padding-bottom: var(--gap); }
+.about { position: relative; padding-bottom: var(--gap); }
+.about-note { position: relative; will-change: transform; }
+/* The cursor that sets the note straight; its position is set from App.tsx. */
+.about-hand { position: absolute; z-index: 2; top: 0; left: 0; width: 0; height: 0; visibility: hidden; transition: scale .15s; pointer-events: none; will-change: transform; }
+.about-hand svg { position: absolute; top: -3px; left: -3px; width: clamp(26px, 2.6vw, 36px); height: auto; overflow: visible; filter: drop-shadow(0 6px 8px rgb(29 33 31 / 30%)); }
 .about-note {
   display: grid;
   max-width: 1040px;
