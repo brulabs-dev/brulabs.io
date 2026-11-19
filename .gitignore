@@ -68,7 +68,7 @@ public/assets/*
 public/assets/brand/*
 !public/assets/brand/logo-principal.png
 !public/assets/brand/icone-principal.png
-!public/assets/brand/bruno-founder-paper-composite-v6.webp
+!public/assets/brand/bruno-founder.webp
 
 public/assets/fonts/*
 !public/assets/fonts/CabinetGrotesk-Variable.woff2

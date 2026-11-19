@@ -413,7 +413,7 @@ function Founder() {
     <section className="about-section section-shell" id="sobre" aria-labelledby="founder-title">
       <div className="cuberto-heading about-heading"><span>Sobre</span><div><h2 id="founder-title">Quem faz o diagnóstico também implementa.</h2><p>Não tem fila de atendimento no meio. O Bruno acompanha da primeira conversa até o que entra em uso.</p></div></div>
       <div className="about-grid">
-        <figure className="about-photo"><img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, fundador da BruLabs" loading="lazy" /></figure>
+        <figure className="about-photo"><img src={asset("assets/brand/bruno-founder.webp")} alt="Bruno, fundador da BruLabs" loading="lazy" /></figure>
         <article className="about-card about-card-main"><span>Fundador</span><h3>Trabalho direto com quem conhece o processo.</h3></article>
         <article className="about-card"><span>Formação</span><strong>Engenharia · UFRGS<br />Especialização em IA<br />MBA · USP/Esalq</strong></article>
         <article className="about-card about-card-wide"><span>Como atua</span><strong>Investigar, priorizar, implementar e acompanhar.</strong></article>
