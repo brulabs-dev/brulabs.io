@@ -14,9 +14,8 @@ const findMedia = (files: Record<string, string>, name: string) => {
 const EMAIL = "bruno@brulabs.io";
 const INSTAGRAM_URL = "https://www.instagram.com/bru.labs/";
 
-// TODO: placeholders. Replace both with the real values before publishing.
-const WHATSAPP_NUMBER = "5548900000000";
-const LINKEDIN_URL = "https://www.linkedin.com/in/SEU-PERFIL";
+const WHATSAPP_NUMBER = "5548936180250";
+const LINKEDIN_URL = "https://www.linkedin.com/company/brulabs/";
 const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Oi, Bruno! Vim pelo site da BruLabs.")}`;
 
 const navLinks = [
