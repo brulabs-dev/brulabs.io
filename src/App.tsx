@@ -372,7 +372,7 @@ function Hero() {
 }
 
 // The agent scene is drawn on a fixed stage and played as a function of time, in seconds:
-// a voice message becomes two tasks, the agent books one in the old system and a person confirms the other.
+// a voice message becomes two tasks, the agent books one in a modern calendar and a person confirms the other in an old system.
 const SCENE = { width: 1200, height: 600, first: 0.45, ask: 7.95, press: 11, close: 11.18, still: 14, end: 15.8 };
 const TILE = 38;
 const BARS = 11;
@@ -380,6 +380,9 @@ const barHeights = (() => {
   const random = seeded(7);
   return Array.from({ length: BARS * 2 }, () => 0.28 + random() * 0.72);
 })();
+
+// Appointments already in the calendar, by cell, each with its colour.
+const calendarEvents: Record<number, string> = { 2: "#cfdcde", 8: "#f0dba6", 15: "#dde2cc", 19: "#f3d3c2", 23: "#cfdcde" };
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -478,8 +481,6 @@ function AgentDemo() {
     const audio = find(".chat-audio");
     const reply = find(".chat-reply");
     const desktop = find(".old-desktop");
-    const agenda = find(".agenda");
-    const stock = find(".stock");
     const dialog = find(".old-dialog");
     const yes = find("[data-answer='yes']");
     const no = find("[data-answer='no']");
@@ -518,30 +519,34 @@ function AgentDemo() {
       const answer = box("[data-answer='yes']");
       const ask = box(".old-dialog");
       wave = box(".chat-wave");
-      targets = [box(".agenda-grid .is-target"), box(".stock-item")];
+      targets = [box(".calendar-grid .is-target"), box(".stock-item")];
 
       const all = [SCENE.width / 2, SCENE.height / 2, Math.max(SCENE.width, SCENE.height * aspect)];
       const close = shot(box(".chat-audio"), 40, narrow ? 300 : 460);
+      const calendar = box(".calendar");
       if (still) {
-        const whole = narrow ? shot(monitor, 14) : all;
+        // Both systems, with their finished tasks, in one frame.
+        const systems = { x: calendar.x, y: monitor.y, w: monitor.x + monitor.w - calendar.x, h: monitor.h };
+        const whole = narrow ? shot(systems, 12) : all;
         camera = [[0, ...whole], [1, ...whole]];
       } else if (narrow) {
         const device = box(".phone");
         const answered = box(".chat-reply");
-        const phone = shot(device, 20);
-        const first = shot(box(".agenda"), 24);
-        const second = shot(box(".stock"), 20);
+        const phone = shot(device, 16);
+        const first = shot(calendar, 24);
+        const second = shot(monitor, 14);
         const last = [device.x + device.w / 2, answered.y + answered.h / 2, 300];
         camera = [[0.9, ...phone], [2.4, ...close], [4.1, ...close], [5.3, ...first], [6.6, ...first], [7.6, ...second], [12, ...second], [13, ...last]];
       } else {
         camera = [[0.9, ...all], [2.4, ...close], [4.1, ...close], [5.3, ...all]];
       }
 
-      const enter = [monitor.x + monitor.w + 50, monitor.y + monitor.h * 0.6];
+      const enter = [calendar.x + calendar.w - 40, -40];
+      const leave = [monitor.x + monitor.w + 50, monitor.y + monitor.h * 0.6];
       const onCell = tip(targets[0], 6, 8);
       const onItem = tip(targets[1], 6, 8);
       const aside = [ask.x - 30, ask.y + 96];
-      agentPath = [[5.2, ...enter], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onItem], [8.05, ...onItem], [8.6, ...aside], [11.35, ...aside], [12.2, ...enter]];
+      agentPath = [[5.2, ...enter], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onItem], [8.05, ...onItem], [8.6, ...aside], [11.35, ...aside], [12.2, ...leave]];
       const below = [answer.x + answer.w / 2 + 70, monitor.y + monitor.h + 90];
       const onYes = tip(answer, 16, 6);
       humanPath = [[9.8, ...below], [10.75, ...onYes], [11.3, ...onYes], [12.1, ...below]];
@@ -575,13 +580,11 @@ function AgentDemo() {
       reply.style.transform = `translateY(${mix(10, 0, answered).toFixed(1)}px)`;
       reply.classList.toggle("is-partial", declined);
 
-      // Old system: the monitor switches on, the stock window comes forward, the dialog waits for an answer.
+      // Old system: the monitor switches on and, later, its dialog waits for an answer.
       const on = span(time, 4.2, 4.8);
       desktop.style.transform = `scaleY(${mix(0.006, 1, on).toFixed(4)})`;
       desktop.style.opacity = on > 0 ? "1" : "0";
       desktop.style.filter = on < 1 ? `brightness(${mix(2.6, 1, on).toFixed(2)})` : "";
-      agenda.classList.toggle("is-active", time < 7.2);
-      stock.classList.toggle("is-active", time >= 7.2);
       dialog.style.visibility = time >= SCENE.ask && time < SCENE.close ? "visible" : "hidden";
       yes.classList.toggle("is-pressed", time >= SCENE.press && !declined);
       no.classList.toggle("is-pressed", time >= SCENE.press && declined);
@@ -597,7 +600,8 @@ function AgentDemo() {
         const half = wave.w / 2;
         const x = mix(mix(wave.x + index * half, wave.x + half + (index === 0 ? -TILE - 5 : 5), formed), target.x + (target.w - TILE) / 2, flight);
         const lift = Math.sin(flight * Math.PI);
-        const y = mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), target.y + (target.h - TILE) / 2, flight) - lift * 70;
+        // The second tile goes the long way, over the calendar.
+        const y = mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), target.y + (target.h - TILE) / 2, flight) - lift * (index === 0 ? 70 : 125);
         const doneAt = index === 0 ? 6.35 : SCENE.close;
         const refused = index === 1 && declined;
         const done = time >= doneAt && !refused;
@@ -683,10 +687,10 @@ function AgentDemo() {
       <div className="section-heading">
         <span>O que é um agente</span>
         <h2 id="demo-title">Um software que assume uma tarefa do começo ao fim.</h2>
-        <p>Ele trabalha nas ferramentas que a empresa já tem. Aqui, o áudio de um cliente vira horário na agenda e baixa no estoque de um sistema antigo. Nas ações importantes, quem decide é você.</p>
+        <p>Ele trabalha nas ferramentas que a empresa já tem, novas ou antigas. Aqui, o áudio de um cliente vira horário na agenda online e baixa no estoque de um sistema antigo. Nas ações importantes, quem decide é você.</p>
       </div>
       <div className="demo-panel">
-        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário na agenda e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa.">
+        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário numa agenda online e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa.">
           <div className="scene-world">
             <div className="phone">
               <div className="phone-screen">
@@ -706,16 +710,17 @@ function AgentDemo() {
                 <div className="chat-input"><b /><i /></div>
               </div>
             </div>
+            <div className="calendar">
+              <div className="calendar-bar"><i /><i /><i /><b /></div>
+              <div className="calendar-head"><CalendarBlank size={24} weight="fill" />Agenda<i /></div>
+              <div className="calendar-days">{[..."STQQSSD"].map((day, index) => <span key={index}>{day}</span>)}</div>
+              <div className="calendar-grid">
+                {Array.from({ length: 28 }, (_, index) => <i key={index} className={index === 10 ? "is-target" : calendarEvents[index] && "is-busy"} style={{ color: calendarEvents[index] }} />)}
+              </div>
+            </div>
             <div className="monitor">
               <div className="monitor-glass">
                 <div className="old-desktop">
-                  <div className="old-window agenda">
-                    <OldTitle label="Agenda" />
-                    <div className="agenda-days">{[..."STQQSSD"].map((day, index) => <span key={index}>{day}</span>)}</div>
-                    <div className="agenda-grid">
-                      {Array.from({ length: 28 }, (_, index) => <i key={index} className={index === 10 ? "is-target" : [2, 8, 15, 19, 23].includes(index) ? "is-busy" : undefined} />)}
-                    </div>
-                  </div>
                   <div className="old-window stock">
                     <OldTitle label="Estoque" />
                     <div className="stock-list">
@@ -729,7 +734,7 @@ function AgentDemo() {
                       ))}
                     </div>
                   </div>
-                  <div className="old-window old-dialog is-active">
+                  <div className="old-window old-dialog">
                     <OldTitle label="Estoque" />
                     <div className="old-dialog-body">
                       <svg viewBox="0 0 16 16"><path d="M8 1.2 15.3 14.6H.7z" fill="#ffd500" stroke="#000" strokeLinejoin="round" /><path d="M7.2 5.6h1.6v4.6H7.2zm0 5.6h1.6v1.6H7.2z" /></svg>
