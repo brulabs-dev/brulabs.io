@@ -74,6 +74,9 @@ public/assets/fonts/*
 !public/assets/fonts/CabinetGrotesk-Variable.woff2
 !public/assets/fonts/Satoshi-Variable.woff2
 !public/assets/fonts/Satoshi-VariableItalic.woff2
+!public/assets/fonts/OldSystem-Regular.woff2
+!public/assets/fonts/OldSystem-Bold.woff2
+!public/assets/fonts/OldSystem-LICENSE.txt
 
 !public/assets/art/**
 
