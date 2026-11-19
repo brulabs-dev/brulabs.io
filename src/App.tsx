@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowClockwise, ArrowRight, Check, HandPalm, InstagramLogo, LinkedinLogo, Plus, WhatsappLogo, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowRight, ArrowUpRight, CalendarBlank, Check, Checks, InstagramLogo, LinkedinLogo, Package, Pause, Play, Plus, WhatsappLogo, X } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 // Optional media, picked up by file name when present:
-//   src/assets/demos/{pedido,atendimento,relatorio}.{mp4,webm}  screen recordings for the examples
 //   src/assets/footer/{mesa,caneca,cadeira}.{png,webp} the office pieces in the footer landscape
-const demoFiles = import.meta.glob<string>("./assets/demos/*.{mp4,webm}", { eager: true, query: "?url", import: "default" });
 const footerFiles = import.meta.glob<string>("./assets/footer/*.{png,webp}", { eager: true, query: "?url", import: "default" });
 const findMedia = (files: Record<string, string>, name: string) => {
   const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
@@ -373,93 +371,311 @@ function Hero() {
   );
 }
 
-type RunStep = { time: string; text: string; human?: boolean };
-type Run = { file: string; label: string; steps: RunStep[] };
+// The agent scene is drawn on a fixed stage and played as a function of time, in seconds:
+// a voice message becomes two tasks, the agent books one in the old system and a person confirms the other.
+const SCENE = { width: 1200, height: 600, first: 0.45, ask: 7.95, press: 11, close: 11.18, still: 14, end: 15.8 };
+const TILE = 38;
+const BARS = 11;
+const barHeights = (() => {
+  const random = seeded(7);
+  return Array.from({ length: BARS * 2 }, () => 0.28 + random() * 0.72);
+})();
 
-// Illustrative runs, not client cases.
-const runs: Run[] = [
-  {
-    file: "pedido",
-    label: "Pedido por e-mail",
-    steps: [
-      { time: "08:12", text: "Chega um pedido por e-mail, em PDF." },
-      { time: "08:12", text: "O agente lê o pedido e confere o estoque no sistema." },
-      { time: "08:13", text: "Lança o pedido e manda um resumo no WhatsApp do gerente." },
-      { time: "08:13", text: "Um item está com preço fora da tabela. O bot não lança e pede aprovação.", human: true },
-    ],
-  },
-  {
-    file: "atendimento",
-    label: "Atendimento no WhatsApp",
-    steps: [
-      { time: "14:03", text: "Um cliente pergunta no WhatsApp se o pedido já saiu." },
-      { time: "14:03", text: "A IA busca o pedido no sistema e acha o código de rastreio." },
-      { time: "14:04", text: "Responde ao cliente com o prazo e o link." },
-      { time: "14:20", text: "O cliente reclama de um item quebrado. O agente passa a conversa pra uma pessoa.", human: true },
-    ],
-  },
-  {
-    file: "relatorio",
-    label: "Relatório da semana",
-    steps: [
-      { time: "07:00", text: "Segunda cedo, o bot abre as planilhas de vendas e o financeiro." },
-      { time: "07:01", text: "Junta os números da semana e compara com a anterior." },
-      { time: "07:02", text: "Envia o relatório por e-mail pra diretoria." },
-      { time: "07:02", text: "Uma filial não lançou os dados. A IA avisa o responsável em vez de chutar.", human: true },
-    ],
-  },
-];
+type Box = { x: number; y: number; w: number; h: number };
 
-const STEP_MS = 1300;
-const NEXT_RUN_MS = 4200;
+// Eased interpolation through timed keyframes [time, ...values]; holds the first and last values outside their range.
+function track(time: number, keys: number[][]) {
+  let index = 0;
+  while (index < keys.length - 2 && time >= keys[index + 1][0]) index += 1;
+  const from = keys[index];
+  const to = keys[index + 1];
+  const progress = span(time, from[0], to[0]);
+  return from.slice(1).map((value, at) => mix(value, to[at + 1], progress));
+}
 
-function AgentDemo() {
-  const [runIndex, setRunIndex] = useState(0);
-  const [shown, setShown] = useState(0);
+function OldTitle({ label }: { label: string }) {
+  return (
+    <div className="old-title">
+      {label}
+      <span>
+        <i><svg viewBox="0 0 9 9"><path d="M0 7h6v2H0z" /></svg></i>
+        <i><svg viewBox="0 0 9 9"><path fillRule="evenodd" d="M0 0h9v9H0zM1 2v6h7V2z" /></svg></i>
+        <i><svg viewBox="0 0 9 9"><path d="M0 0h2l2.5 3L7 0h2L5.5 4.5 9 9H7L4.5 6 2 9H0l3.5-4.5z" /></svg></i>
+      </span>
+    </div>
+  );
+}
+
+// A product of our own, shown as a silent recording next to the illustrative scene.
+function RealCase() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const heldRef = useRef(false);
   const [playing, setPlaying] = useState(false);
-  const [autoAdvance, setAutoAdvance] = useState(true);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const run = runs[runIndex];
-  const video = findMedia(demoFiles, run.file);
 
-  // Start the first time the panel is on screen; show everything at once under reduced motion.
+  // The recording plays only while it is on screen, so the file is not fetched before the visitor gets there.
   useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) {
-      setShown(runs[0].steps.length);
-      setAutoAdvance(false);
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      setPlaying(true);
-    }, { threshold: 0.35 });
-    observer.observe(panel);
-    return () => observer.disconnect();
+    const video = videoRef.current;
+    if (!video || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const visibility = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) video.pause();
+      else if (!heldRef.current) video.play().catch(() => undefined);
+    }, { threshold: 0.4 });
+    visibility.observe(video);
+    return () => visibility.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (shown < run.steps.length) {
-      const timer = window.setTimeout(() => setShown((count) => count + 1), shown === 0 ? 500 : STEP_MS);
-      return () => window.clearTimeout(timer);
-    }
-    if (!autoAdvance) return;
-    const timer = window.setTimeout(() => {
-      setRunIndex((index) => (index + 1) % runs.length);
-      setShown(0);
-    }, NEXT_RUN_MS);
-    return () => window.clearTimeout(timer);
-  }, [playing, shown, run, autoAdvance]);
+  const toggle = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    heldRef.current = !video.paused;
+    if (video.paused) video.play().catch(() => undefined); else video.pause();
+  };
 
-  const choose = (index: number) => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    setAutoAdvance(false);
-    setRunIndex(index);
-    setShown(reduced ? runs[index].steps.length : 0);
-    setPlaying(!reduced);
+  return (
+    <article className="real-case">
+      <figure>
+        <video
+          ref={videoRef}
+          src={asset("assets/case/mpn/whatsapp.mp4")}
+          poster={asset("assets/case/mpn/whatsapp.webp")}
+          width={720}
+          height={1280}
+          muted
+          loop
+          playsInline
+          preload="none"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          aria-label="Gravação: uma pessoa fotografa o prato, envia no WhatsApp e recebe a análise da refeição."
+        />
+        <button type="button" onClick={toggle} aria-label={playing ? "Pausar o vídeo" : "Reproduzir o vídeo"}>
+          {playing ? <Pause size={16} weight="fill" aria-hidden="true" /> : <Play size={16} weight="fill" aria-hidden="true" />}
+        </button>
+      </figure>
+      <div>
+        <span>Caso real</span>
+        <h3>Manda Pra Nutri</h3>
+        <p>A pessoa fotografa o prato e manda no WhatsApp. O agente identifica os alimentos, estima calorias e macros e guarda tudo no histórico que a nutricionista acompanha.</p>
+        <a className="text-link" href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver o produto <ArrowUpRight size={16} weight="bold" aria-hidden="true" /></a>
+        <small>Gravação real, com a espera pela resposta cortada.</small>
+      </div>
+    </article>
+  );
+}
+
+function AgentDemo() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef({ time: SCENE.first, paused: false, visitor: false, declined: false, dirty: false });
+  const [paused, setPaused] = useState(false);
+  const [still] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const state = stateRef.current;
+    const find = (selector: string) => scene.querySelector<HTMLElement>(selector) as HTMLElement;
+    const world = find(".scene-world");
+    const audio = find(".chat-audio");
+    const reply = find(".chat-reply");
+    const desktop = find(".old-desktop");
+    const agenda = find(".agenda");
+    const stock = find(".stock");
+    const dialog = find(".old-dialog");
+    const yes = find("[data-answer='yes']");
+    const no = find("[data-answer='no']");
+    const quantity = find(".stock-quantity");
+    const level = find(".stock-level b");
+    const agent = find(".scene-cursor.is-agent");
+    const human = find(".scene-cursor.is-human");
+    const tiles = Array.from(scene.querySelectorAll<HTMLElement>(".scene-tile"), (tile) => ({
+      tile,
+      bars: Array.from(tile.querySelectorAll<HTMLElement>("i")),
+      marks: Array.from(tile.querySelectorAll<SVGElement>("svg")),
+    }));
+
+    let view = { w: 1, h: 1 };
+    let wave: Box = { x: 0, y: 0, w: 0, h: 0 };
+    let targets: Box[] = [];
+    let camera: number[][] = [];
+    let agentPath: number[][] = [];
+    let humanPath: number[][] = [];
+
+    // Positions are measured on the untransformed stage, so the layout lives in the CSS alone.
+    const build = () => {
+      for (const element of [world, audio, reply, desktop]) element.style.transform = "";
+      const origin = world.getBoundingClientRect();
+      const box = (selector: string): Box => {
+        const rect = find(selector).getBoundingClientRect();
+        return { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height };
+      };
+      view = { w: scene.clientWidth, h: scene.clientHeight };
+      const aspect = view.w / view.h;
+      const narrow = aspect < 1.3;
+      // A shot is [centre x, centre y, width]: the stage area the camera frames.
+      const shot = (target: Box, pad: number, min = 0) => [target.x + target.w / 2, target.y + target.h / 2, Math.max(min, target.w + pad * 2, (target.h + pad * 2) * aspect)];
+      const tip = (target: Box, dx: number, dy: number) => [target.x + target.w / 2 + dx, target.y + target.h / 2 + dy];
+      const monitor = box(".monitor");
+      const answer = box("[data-answer='yes']");
+      const ask = box(".old-dialog");
+      wave = box(".chat-wave");
+      targets = [box(".agenda-grid .is-target"), box(".stock-item")];
+
+      const all = [SCENE.width / 2, SCENE.height / 2, Math.max(SCENE.width, SCENE.height * aspect)];
+      const close = shot(box(".chat-audio"), 40, narrow ? 300 : 460);
+      if (still) {
+        const whole = narrow ? shot(monitor, 14) : all;
+        camera = [[0, ...whole], [1, ...whole]];
+      } else if (narrow) {
+        const device = box(".phone");
+        const answered = box(".chat-reply");
+        const phone = shot(device, 20);
+        const first = shot(box(".agenda"), 24);
+        const second = shot(box(".stock"), 20);
+        const last = [device.x + device.w / 2, answered.y + answered.h / 2, 300];
+        camera = [[0.9, ...phone], [2.4, ...close], [4.1, ...close], [5.3, ...first], [6.6, ...first], [7.6, ...second], [12, ...second], [13, ...last]];
+      } else {
+        camera = [[0.9, ...all], [2.4, ...close], [4.1, ...close], [5.3, ...all]];
+      }
+
+      const enter = [monitor.x + monitor.w + 50, monitor.y + monitor.h * 0.6];
+      const onCell = tip(targets[0], 6, 8);
+      const onItem = tip(targets[1], 6, 8);
+      const aside = [ask.x - 30, ask.y + 96];
+      agentPath = [[5.2, ...enter], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onItem], [8.05, ...onItem], [8.6, ...aside], [11.35, ...aside], [12.2, ...enter]];
+      const below = [answer.x + answer.w / 2 + 70, monitor.y + monitor.h + 90];
+      const onYes = tip(answer, 16, 6);
+      humanPath = [[9.8, ...below], [10.75, ...onYes], [11.3, ...onYes], [12.1, ...below]];
+    };
+
+    const pointer = (element: HTMLElement, time: number, path: number[][], presses: number[], shown: boolean) => {
+      const [x, y] = track(time, path);
+      const since = presses.map((press) => time - press).find((age) => age > -0.09 && age < 0.4);
+      const down = since !== undefined && since < 0.16;
+      element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${down ? 0.84 : 1})`;
+      element.style.opacity = shown ? "1" : "0";
+      const ring = element.firstElementChild as HTMLElement;
+      const age = since !== undefined && since >= 0 ? since / 0.4 : 1;
+      ring.style.transform = `scale(${(0.3 + age * 1.1).toFixed(3)})`;
+      ring.style.opacity = ((1 - age) * 0.8).toFixed(3);
+    };
+
+    const render = (time: number) => {
+      const { visitor, declined } = state;
+      const [cx, cy, width] = track(time, camera);
+      const scale = view.w / width;
+      world.style.transform = `translate(${(view.w / 2 - cx * scale).toFixed(2)}px, ${(view.h / 2 - cy * scale).toFixed(2)}px) scale(${scale.toFixed(4)})`;
+      world.style.opacity = Math.min(span(time, 0, 0.35), 1 - span(time, SCENE.end - 0.4, SCENE.end)).toFixed(3);
+
+      // Phone: the voice message arrives and plays; the answer comes at the end.
+      const arrived = span(time, 0.8, 1.1);
+      audio.style.opacity = arrived.toFixed(3);
+      audio.style.transform = `scale(${mix(0.86, 1, arrived).toFixed(3)})`;
+      const answered = span(time, 12.9, 13.2);
+      reply.style.opacity = answered.toFixed(3);
+      reply.style.transform = `translateY(${mix(10, 0, answered).toFixed(1)}px)`;
+      reply.classList.toggle("is-partial", declined);
+
+      // Old system: the monitor switches on, the stock window comes forward, the dialog waits for an answer.
+      const on = span(time, 4.2, 4.8);
+      desktop.style.transform = `scaleY(${mix(0.006, 1, on).toFixed(4)})`;
+      desktop.style.opacity = on > 0 ? "1" : "0";
+      desktop.style.filter = on < 1 ? `brightness(${mix(2.6, 1, on).toFixed(2)})` : "";
+      agenda.classList.toggle("is-active", time < 7.2);
+      stock.classList.toggle("is-active", time >= 7.2);
+      dialog.style.visibility = time >= SCENE.ask && time < SCENE.close ? "visible" : "hidden";
+      yes.classList.toggle("is-pressed", time >= SCENE.press && !declined);
+      no.classList.toggle("is-pressed", time >= SCENE.press && declined);
+      const left = declined ? 48 : Math.round(mix(48, 38, span(time, SCENE.close + 0.05, SCENE.close + 0.7)));
+      quantity.textContent = String(left);
+      level.style.width = `${(left / 60) * 100}%`;
+
+      // The voice message bars close up into two tiles, which fly to the day and to the stock item.
+      const formed = span(time, 3, 4);
+      tiles.forEach(({ tile, bars, marks: [icon, check] }, index) => {
+        const target = targets[index];
+        const flight = span(time, 4.4 + index * 0.25, 5.5 + index * 0.25);
+        const half = wave.w / 2;
+        const x = mix(mix(wave.x + index * half, wave.x + half + (index === 0 ? -TILE - 5 : 5), formed), target.x + (target.w - TILE) / 2, flight);
+        const lift = Math.sin(flight * Math.PI);
+        const y = mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), target.y + (target.h - TILE) / 2, flight) - lift * 70;
+        const doneAt = index === 0 ? 6.35 : SCENE.close;
+        const refused = index === 1 && declined;
+        const done = time >= doneAt && !refused;
+        const pop = done ? 1 + 0.22 * (1 - span(time, doneAt, doneAt + 0.3)) : 1;
+        tile.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(pop * (1 + lift * 0.18)).toFixed(3)})`;
+        tile.style.width = `${mix(half, TILE, formed).toFixed(1)}px`;
+        tile.style.height = `${mix(wave.h, TILE, formed).toFixed(1)}px`;
+        tile.style.borderRadius = `${(formed * 7).toFixed(1)}px`;
+        const solid = (formed ** 3).toFixed(3);
+        tile.style.background = done ? "#e9652e" : `rgb(29 33 31 / ${solid})`;
+        tile.style.boxShadow = `0 0 0 2px rgb(255 250 240 / ${solid}), 0 ${(lift * 14).toFixed(1)}px ${(lift * 20).toFixed(1)}px rgb(0 0 0 / ${(lift * 0.35).toFixed(3)})`;
+        tile.style.opacity = (arrived * (refused ? 1 - span(time, SCENE.close, SCENE.close + 0.4) : 1)).toFixed(3);
+        icon.style.opacity = done ? "0" : span(time, 3.7, 4.05).toFixed(3);
+        check.style.opacity = done ? "1" : "0";
+        bars.forEach((bar, at) => {
+          const order = index * BARS + at;
+          const beat = time > 1.2 && time < 3 ? 1 + 0.16 * Math.sin(time * 11 + order * 1.9) : 1;
+          bar.style.left = `${((at + mix(0.25, 0, formed)) / BARS) * 100}%`;
+          bar.style.width = `${(mix(0.5, 1.05, formed) / BARS) * 100}%`;
+          bar.style.height = `${mix(Math.min(1, barHeights[order] * beat), 1, formed) * 100}%`;
+          bar.style.background = (time - 1.2) / 1.8 > order / (BARS * 2) ? "#1d211f" : "#b9b3a6";
+          bar.style.opacity = (1 - span(time, 3.7, 4)).toFixed(3);
+        });
+      });
+
+      pointer(agent, time, agentPath, [6.35, 7.85], time > 5.2 && time < 12.2);
+      pointer(human, time, humanPath, [SCENE.press], !visitor && time > 9.8 && time < 12.1);
+    };
+
+    const onResize = () => { build(); render(state.time); };
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(scene);
+    if (still) {
+      state.time = SCENE.still;
+      onResize();
+      return () => resizeObserver.disconnect();
+    }
+
+    let frame = 0;
+    let last = 0;
+    let onScreen = false;
+    let started = false;
+    onResize();
+    // The scene starts the first time a good part of it is on screen, and waits while it is off screen.
+    const visibility = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      if (entry.intersectionRatio >= 0.35) started = true;
+    }, { threshold: [0, 0.35] });
+    visibility.observe(scene);
+    const tick = (now: number) => {
+      frame = window.requestAnimationFrame(tick);
+      const delta = Math.min(0.05, (now - (last || now)) / 1000);
+      last = now;
+      if (!onScreen) return;
+      if (started && !state.paused) {
+        state.time += delta;
+        if (state.time >= SCENE.end) Object.assign(state, { time: 0, visitor: false, declined: false });
+      } else if (!state.dirty) return;
+      state.dirty = false;
+      render(state.time);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(frame); resizeObserver.disconnect(); visibility.disconnect(); };
+  }, [still]);
+
+  // The visitor may answer the dialog; if nobody does, the "Humano" cursor answers yes.
+  const answer = (accepted: boolean) => {
+    const state = stateRef.current;
+    if (state.time < SCENE.ask || state.time >= SCENE.press) return;
+    Object.assign(state, { time: SCENE.press, visitor: true, declined: !accepted, dirty: true });
+  };
+  const replay = () => {
+    Object.assign(stateRef.current, { time: 0, visitor: false, declined: false, paused: false, dirty: true });
+    setPaused(false);
+  };
+  const togglePause = () => {
+    stateRef.current.paused = !paused;
+    setPaused(!paused);
   };
 
   return (
@@ -467,38 +683,102 @@ function AgentDemo() {
       <div className="section-heading">
         <span>O que é um agente</span>
         <h2 id="demo-title">Um software que assume uma tarefa do começo ao fim.</h2>
-        <p>Ele usa as ferramentas que a empresa já tem e chama uma pessoa quando não sabe o que fazer. Veja três tarefas acontecendo:</p>
+        <p>Ele trabalha nas ferramentas que a empresa já tem. Aqui, o áudio de um cliente vira horário na agenda e baixa no estoque de um sistema antigo. Nas ações importantes, quem decide é você.</p>
       </div>
-      <div className="demo-panel" ref={panelRef}>
-        <div className="demo-tabs" role="group" aria-label="Escolher a tarefa de exemplo">
-          {runs.map((item, index) => (
-            <button type="button" key={item.label} aria-pressed={index === runIndex} onClick={() => choose(index)}>{item.label}</button>
-          ))}
-        </div>
-        <div className={`demo-body${video ? " has-video" : ""}`} key={runIndex}>
-          {video && (
-            <figure className="demo-screen">
-              <figcaption>
-                <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" />
-              </figcaption>
-              <video src={video} autoPlay muted loop playsInline preload="metadata" aria-label={`Gravação de tela: ${run.label}`} />
-            </figure>
-          )}
-          <ol className="demo-log">
-            {run.steps.map((step, index) => (
-              <li key={step.text} className={`${video || index < shown ? "is-shown" : ""}${step.human ? " is-human" : ""}`}>
-                <time>{step.time}</time>
-                <span className="demo-mark" aria-hidden="true">{step.human ? <HandPalm size={18} weight="fill" /> : <Check size={16} weight="bold" />}</span>
-                <p>{step.text}</p>
-              </li>
+      <div className="demo-panel">
+        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário na agenda e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa.">
+          <div className="scene-world">
+            <div className="phone">
+              <div className="phone-screen">
+                <div className="chat-head"><i /><b /></div>
+                <div className="chat-body">
+                  <div className="chat-bubble chat-old"><b /><b /></div>
+                  <div className="chat-bubble chat-audio">
+                    <span className="chat-play"><Play size={16} weight="fill" /></span>
+                    <span className="chat-wave">{barHeights.map((height, index) => <i key={index} style={{ height: `${height * 100}%` }} />)}</span>
+                  </div>
+                  <div className="chat-bubble chat-reply">
+                    <span><CalendarBlank size={24} weight="fill" /><Check size={18} weight="bold" /></span>
+                    <span><Package size={24} weight="fill" /><Check size={18} weight="bold" /></span>
+                    <Checks size={17} weight="bold" />
+                  </div>
+                </div>
+                <div className="chat-input"><b /><i /></div>
+              </div>
+            </div>
+            <div className="monitor">
+              <div className="monitor-glass">
+                <div className="old-desktop">
+                  <div className="old-window agenda">
+                    <OldTitle label="Agenda" />
+                    <div className="agenda-days">{[..."STQQSSD"].map((day, index) => <span key={index}>{day}</span>)}</div>
+                    <div className="agenda-grid">
+                      {Array.from({ length: 28 }, (_, index) => <i key={index} className={index === 10 ? "is-target" : [2, 8, 15, 19, 23].includes(index) ? "is-busy" : undefined} />)}
+                    </div>
+                  </div>
+                  <div className="old-window stock">
+                    <OldTitle label="Estoque" />
+                    <div className="stock-list">
+                      {[48, 54, 9, 31].map((amount) => (
+                        <div className="stock-row" key={amount}>
+                          <i className="stock-item" />
+                          <b className="stock-name" />
+                          <span className="stock-level"><b style={{ width: `${(amount / 60) * 100}%` }} /></span>
+                          <span className="stock-quantity">{amount}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="old-window old-dialog is-active">
+                    <OldTitle label="Estoque" />
+                    <div className="old-dialog-body">
+                      <svg viewBox="0 0 16 16"><path d="M8 1.2 15.3 14.6H.7z" fill="#ffd500" stroke="#000" strokeLinejoin="round" /><path d="M7.2 5.6h1.6v4.6H7.2zm0 5.6h1.6v1.6H7.2z" /></svg>
+                      <Package size={32} weight="fill" />
+                      −10
+                    </div>
+                    <div className="old-dialog-actions">
+                      <div className="old-button is-default" data-answer="yes" onClick={() => answer(true)}>Sim</div>
+                      <div className="old-button" data-answer="no" onClick={() => answer(false)}>Não</div>
+                    </div>
+                  </div>
+                  <div className="old-taskbar">
+                    <span className="old-button"><i />Iniciar</span>
+                    <span>08:12</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {[CalendarBlank, Package].map((Icon, index) => (
+              <div className="scene-tile" key={index}>
+                {Array.from({ length: BARS }, (_, bar) => <i key={bar} />)}
+                <Icon size={22} weight="fill" />
+                <Check size={22} weight="bold" />
+              </div>
             ))}
-          </ol>
+            <span className="scene-cursor is-agent">
+              <i />
+              <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[0]} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+            </span>
+            <span className="scene-cursor is-human">
+              <i />
+              <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill="#1d211f" stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+              <b>Humano</b>
+            </span>
+          </div>
         </div>
         <div className="demo-foot">
-          <span>{video ? "Gravação de tela" : "Exemplo ilustrativo"}</span>
-          <button type="button" onClick={() => choose(runIndex)}><ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Repetir</button>
+          <span>Exemplo ilustrativo</span>
+          {!still && (
+            <div>
+              <button type="button" onClick={togglePause} aria-label={paused ? "Continuar a animação" : "Pausar a animação"}>
+                {paused ? <Play size={16} weight="fill" aria-hidden="true" /> : <Pause size={16} weight="fill" aria-hidden="true" />}
+              </button>
+              <button type="button" onClick={replay}><ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Repetir</button>
+            </div>
+          )}
         </div>
       </div>
+      <RealCase />
       <p className="demo-note">E quando um agente não é a resposta, a gente avisa.</p>
     </section>
   );
