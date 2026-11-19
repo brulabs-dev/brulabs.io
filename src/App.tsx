@@ -1,463 +1,1068 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUpRight, List, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowRight, ArrowUpRight, CalendarBlank, Check, Checks, InstagramLogo, LinkedinLogo, Package, Pause, Play, Plus, WhatsappLogo, X } from "@phosphor-icons/react";
 import { tallyUrl } from "./tally";
 
-const sitePath = (path = "") => `${import.meta.env.BASE_URL}${path}`;
-const asset = sitePath;
+const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
-type RevealProps = {
-  children: React.ReactNode;
-  className?: string;
+// Optional media, picked up by file name when present:
+//   src/assets/footer/{mesa,caneca,cadeira}.{png,webp} the office pieces in the footer landscape
+const footerFiles = import.meta.glob<string>("./assets/footer/*.{png,webp}", { eager: true, query: "?url", import: "default" });
+const findMedia = (files: Record<string, string>, name: string) => {
+  const key = Object.keys(files).find((path) => path.split("/").pop()?.split(".")[0] === name);
+  return key ? files[key] : undefined;
 };
+const EMAIL = "bruno@brulabs.io";
+const INSTAGRAM_URL = "https://www.instagram.com/bru.labs/";
 
-function Reveal({ children, className = "" }: RevealProps) {
-  return <div className={className}>{children}</div>;
-}
+const WHATSAPP_NUMBER = "5548936180250";
+const LINKEDIN_URL = "https://www.linkedin.com/company/brulabs/";
+const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Oi, Bruno! Vim pelo site da BruLabs.")}`;
 
-function ArrowMark({ external = false }: { external?: boolean }) {
-  return (
-    <span className="arrow-mark" aria-hidden="true">
-      {external ? <ArrowUpRight size={16} weight="bold" /> : <ArrowRight size={16} weight="bold" />}
-    </span>
-  );
-}
+const navLinks = [
+  ["O que é um agente", "#agentes"],
+  ["Como trabalhamos", "#metodo"],
+  ["Quem faz", "#sobre"],
+];
 
 function Header() {
-  const [open, setOpen] = useState(false);
-  const links = [
-    ["Trabalho", "#trabalho"],
-    ["Serviços", "#servicos"],
-    ["Processo", "#processo"],
-    ["Treinamentos", "#treinamentos"],
-    ["Sobre", "#sobre"],
-  ];
-
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, []);
-
   return (
     <header className="site-header section-shell">
       <a href="#topo" className="brand" aria-label="BruLabs, início">
         <img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" />
       </a>
-      <nav className="desktop-nav" aria-label="Navegação principal">
-        {links.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
+      <nav className="site-nav" aria-label="Navegação principal">
+        {navLinks.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
       </nav>
-      <a className="button button-small desktop-cta" href={tallyUrl({ page: "home", cta: "header" })}>
-        Conversar sobre o projeto <ArrowMark />
-      </a>
-      <button
-        className="menu-button"
-        type="button"
-        aria-expanded={open}
-        aria-controls="mobile-nav"
-        aria-label={open ? "Fechar menu" : "Abrir menu"}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {open ? <X size={23} weight="light" /> : <List size={23} weight="light" />}
-      </button>
-      {open && (
-        <nav className="mobile-nav" id="mobile-nav" aria-label="Navegação móvel">
-          {links.map(([label, href]) => <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>)}
-          <a className="button" href={tallyUrl({ page: "home", cta: "header-mobile" })}>
-            Conversar sobre o projeto <ArrowMark />
-          </a>
-        </nav>
-      )}
+      <a className="button button-small" href="#contato">Falar com a BruLabs</a>
     </header>
   );
 }
 
-function MpnProductScene() {
+// Small seeded generator so the board has the same shape on every load.
+function seeded(seed: number) {
+  let state = seed;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// One colour per agent cursor: earthy tones chosen to sit next to the brand orange, cream and ink.
+const AGENT_COLORS = ["#e9652e", "#9c3b3b", "#d9a441", "#6b7b4b", "#1d211f", "#3d6670"];
+const POINTER_SHAPE = "M0 0 L0 17 L4.6 13 L7.6 20 L10.4 18.8 L7.5 12 L13.5 12 Z";
+
+type BoardCell = { x: number; y: number; state: 0 | 1 | 2; since: number; taken: boolean };
+type BoardAgent = { x: number; y: number; target: BoardCell | null; clickAt: number; pressedAt: number; enterAt: number; leftSide: boolean };
+
+// A board of small pending tasks. It sits still until the visitor moves over it;
+// then agent cursors come in from the edges and clear tasks alongside the visitor.
+function TaskBoard({ counterRef }: { counterRef: React.RefObject<HTMLParagraphElement | null> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const host = canvas?.parentElement;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !host || !context) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const canHover = window.matchMedia("(hover: hover)").matches;
+    const random = seeded(41);
+    const pointerShape = new Path2D(POINTER_SHAPE);
+
+    let cells: BoardCell[] = [];
+    let agents: BoardAgent[] = [];
+    let tile = 40;
+    let pitch = 44;
+    let width = 0;
+    let height = 0;
+    let pointer: { x: number; y: number } | null = null;
+    let active = false;
+    let refilling = false;
+    let lastRefill = 0;
+    let lastTime = 0;
+    let frame = 0;
+    let onScreen = true;
+    let byAgents = 0;
+    let byVisitor = 0;
+
+    const report = () => {
+      const counter = counterRef.current;
+      if (!counter) return;
+      const total = byAgents + byVisitor;
+      counter.textContent = total === 0
+        ? (canHover ? "Passe o mouse no quadro" : "Toque numa tarefa")
+        : `${byAgents} tarefas feitas por agentes · ${byVisitor} por você`;
+    };
+
+    const build = () => {
+      const box = host.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      width = box.width;
+      height = box.height;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const narrow = width < 700;
+      tile = narrow ? 30 : 40;
+      pitch = tile + 4;
+      const columns = Math.floor((width + 4) / pitch);
+      const rows = Math.floor((height + 4) / pitch);
+      const offsetX = (width - (columns * pitch - 4)) / 2;
+      const copy = host.querySelector<HTMLElement>(".hero-copy");
+      const copyBottom = copy ? copy.getBoundingClientRect().bottom - box.top : height * 0.5;
+      const shape = seeded(17);
+      let drift = 0;
+      cells = [];
+      for (let column = 0; column < columns; column += 1) {
+        const t = columns > 1 ? column / (columns - 1) : 0;
+        drift = (drift + (shape() - 0.5) * 0.14) * 0.82;
+        let level: number;
+        if (narrow) {
+          level = Math.floor((height - copyBottom - 22) / pitch) - Math.floor(shape() * 2.4);
+        } else {
+          const left = 0.17 * Math.pow(Math.max(0, 1 - t / 0.5), 1.1);
+          const right = 0.96 * Math.pow(Math.max(0, (t - 0.44) / 0.56), 0.9);
+          level = Math.min(rows - 2, Math.round((Math.max(left, right) + drift) * rows));
+        }
+        for (let depth = 0; depth < level && depth < rows; depth += 1) {
+          if (level - depth <= 2 && shape() > 0.62) continue;
+          const state = shape() > 0.1 ? 1 : 0;
+          cells.push({ x: offsetX + column * pitch, y: height - (depth + 1) * pitch, state, since: -9999, taken: false });
+        }
+      }
+      const count = narrow ? 3 : AGENT_COLORS.length;
+      const entries = [
+        { x: -40, y: height * 0.55 }, { x: width + 40, y: height * 0.3 }, { x: -40, y: height * 0.86 },
+        { x: width + 40, y: height * 0.75 }, { x: width * 0.22, y: height + 40 }, { x: width * 0.85, y: -40 },
+      ];
+      if (canHover) entries[0] = { x: width * 0.74, y: height * 0.6 };
+      // On wide screens two agents keep to the left half, so the strip under the text is not left alone.
+      agents = entries.slice(0, count).map((entry, index) => ({ ...entry, target: null, clickAt: 0, pressedAt: -9999, enterAt: index * 1100, leftSide: !narrow && (index === 2 || index === 4) }));
+    };
+
+    const complete = (cell: BoardCell, time: number, visitor: boolean) => {
+      cell.state = 2;
+      cell.since = time;
+      cell.taken = false;
+      if (visitor) byVisitor += 1; else byAgents += 1;
+      report();
+    };
+
+    const cellAt = (x: number, y: number) => cells.find((cell) => x >= cell.x && x <= cell.x + tile && y >= cell.y && y <= cell.y + tile);
+
+    const pickTarget = (agent: BoardAgent) => {
+      const free = cells.filter((cell) => cell.state === 1 && !cell.taken);
+      const half = width * 0.5;
+      const own = free.filter((cell) => (cell.x < half) === agent.leftSide);
+      const open = own.length > 0 ? own : free;
+      if (open.length === 0) return null;
+      open.sort((first, second) => Math.hypot(first.x - agent.x, first.y - agent.y) - Math.hypot(second.x - agent.x, second.y - agent.y));
+      const choice = open[Math.floor(random() * Math.min(7, open.length))];
+      choice.taken = true;
+      return choice;
+    };
+
+    let startedAt = 0;
+    const update = (time: number, delta: number) => {
+      for (const cell of cells) {
+        if (cell.state === 2 && time - cell.since > 2400) { cell.state = 0; cell.since = time; }
+      }
+      if (!active) return;
+      const pending = cells.reduce((sum, cell) => sum + (cell.state === 1 ? 1 : 0), 0);
+      if (pending < cells.length * 0.3) refilling = true;
+      if (pending > cells.length * 0.86) refilling = false;
+      if (refilling && time - lastRefill > 60) {
+        lastRefill = time;
+        const empty = cells.filter((cell) => cell.state === 0);
+        const next = empty[Math.floor(random() * empty.length)];
+        if (next) { next.state = 1; next.since = time; }
+      }
+      for (const agent of agents) {
+        if (time - startedAt < agent.enterAt) continue;
+        if (!agent.target || agent.target.state !== 1) {
+          if (agent.target) agent.target.taken = false;
+          agent.target = pickTarget(agent);
+          agent.clickAt = 0;
+        }
+        if (!agent.target) continue;
+        const goalX = agent.target.x + tile * 0.42;
+        const goalY = agent.target.y + tile * 0.4;
+        const distance = Math.hypot(goalX - agent.x, goalY - agent.y);
+        if (distance > 2.5) {
+          const step = Math.min(distance, Math.min(760, 140 + distance * 5.5) * delta);
+          agent.x += ((goalX - agent.x) / distance) * step;
+          agent.y += ((goalY - agent.y) / distance) * step;
+        } else if (agent.clickAt === 0) {
+          agent.clickAt = time + 130 + random() * 300;
+        } else if (time >= agent.clickAt) {
+          agent.pressedAt = time;
+          complete(agent.target, time, false);
+          agent.target = null;
+        }
+      }
+    };
+
+    const roundedTile = (x: number, y: number, size: number) => {
+      context.beginPath();
+      context.roundRect(x, y, size, size, size * 0.16);
+      context.fill();
+    };
+
+    const drawPointer = (x: number, y: number, color: string, pressed: number) => {
+      const scale = (tile / 40) * (1.25 - 0.18 * pressed);
+      if (pressed > 0) {
+        context.strokeStyle = color;
+        context.globalAlpha = pressed * 0.7;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(x, y, 6 + (1 - pressed) * 22, 0, Math.PI * 2);
+        context.stroke();
+        context.globalAlpha = 1;
+      }
+      context.save();
+      context.translate(x, y);
+      context.scale(scale, scale);
+      context.shadowColor = "rgb(29 33 31 / 30%)";
+      context.shadowBlur = 8;
+      context.shadowOffsetY = 3;
+      context.fillStyle = color;
+      context.fill(pointerShape);
+      context.shadowColor = "transparent";
+      context.lineJoin = "round";
+      context.lineWidth = 1.5;
+      context.strokeStyle = "#fffaf0";
+      context.stroke(pointerShape);
+      context.restore();
+    };
+
+    const draw = (time: number) => {
+      context.clearRect(0, 0, width, height);
+      const hovered = pointer ? cellAt(pointer.x, pointer.y) : undefined;
+      for (const cell of cells) {
+        const age = time - cell.since;
+        if (cell.state === 0) {
+          context.fillStyle = "rgb(29 33 31 / 9%)";
+          roundedTile(cell.x + tile * 0.4, cell.y + tile * 0.4, tile * 0.2);
+          continue;
+        }
+        const grow = reduced ? 1 : Math.min(1, age / 220);
+        const size = tile * (0.55 + 0.45 * (1 - Math.pow(1 - grow, 3)));
+        const inset = (tile - size) / 2;
+        if (cell.state === 1) {
+          context.fillStyle = cell === hovered ? "#474e49" : "#1d211f";
+          roundedTile(cell.x + inset, cell.y + inset, size);
+          continue;
+        }
+        context.globalAlpha = Math.max(0, Math.min(1, (2400 - age) / 400));
+        context.fillStyle = "#e9652e";
+        roundedTile(cell.x + inset, cell.y + inset, size);
+        context.strokeStyle = "#fffaf0";
+        context.lineWidth = tile * 0.085;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.beginPath();
+        context.moveTo(cell.x + tile * 0.3, cell.y + tile * 0.52);
+        context.lineTo(cell.x + tile * 0.44, cell.y + tile * 0.66);
+        context.lineTo(cell.x + tile * 0.71, cell.y + tile * 0.36);
+        context.stroke();
+        context.globalAlpha = 1;
+      }
+      if (!active && canHover) {
+        // Before the visitor arrives, one agent waits on the board without doing anything.
+        drawPointer(width * 0.74, height * 0.6, AGENT_COLORS[0], 0);
+      }
+      agents.forEach((agent, index) => {
+        if (!active || time - startedAt < agent.enterAt) return;
+        const pressed = Math.max(0, 1 - (time - agent.pressedAt) / 260);
+        drawPointer(agent.x, agent.y, AGENT_COLORS[index], pressed);
+      });
+    };
+
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (!onScreen) { lastTime = time; return; }
+      const delta = Math.min(0.05, (time - (lastTime || time)) / 1000);
+      lastTime = time;
+      update(time, delta);
+      draw(time);
+    };
+
+    const activate = () => {
+      if (active || reduced) return;
+      active = true;
+      startedAt = performance.now();
+    };
+
+    const position = (event: PointerEvent) => {
+      const box = host.getBoundingClientRect();
+      return { x: event.clientX - box.left, y: event.clientY - box.top };
+    };
+    const onMove = (event: PointerEvent) => {
+      pointer = position(event);
+      if (event.pointerType === "mouse") activate();
+      if (reduced) draw(performance.now());
+    };
+    const onLeave = () => { pointer = null; if (reduced) draw(performance.now()); };
+    const onDown = (event: PointerEvent) => {
+      if ((event.target as HTMLElement).closest("a, button")) return;
+      const spot = position(event);
+      const cell = cellAt(spot.x, spot.y);
+      activate();
+      if (cell && cell.state === 1) complete(cell, performance.now(), true);
+      if (reduced) draw(performance.now());
+    };
+    const onResize = () => { build(); draw(performance.now()); };
+
+    build();
+    report();
+    draw(0);
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(host);
+    const visibility = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      // Touch screens have no hover, so the agents start once the board is in view.
+      if (!canHover && entry.intersectionRatio > 0.5) activate();
+    }, { threshold: [0, 0.5] });
+    visibility.observe(host);
+    host.addEventListener("pointermove", onMove);
+    host.addEventListener("pointerleave", onLeave);
+    host.addEventListener("pointerdown", onDown);
+    if (!reduced) frame = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      visibility.disconnect();
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
+      host.removeEventListener("pointerdown", onDown);
+    };
+  }, [counterRef]);
+
+  return <canvas className="task-board" ref={canvasRef} aria-hidden="true" />;
+}
+
+function Hero() {
+  const counterRef = useRef<HTMLParagraphElement>(null);
+
   return (
-    <div className="product-scene" role="img" aria-label="Representação do produto Manda Pra Nutri no WhatsApp e no painel de acompanhamento">
-      <img className="product-statue" src={asset("assets/art/case/mpn-statue.webp")} alt="" aria-hidden="true" />
-
-      <div className="dashboard-shell" aria-hidden="true">
-        <div className="dashboard-window">
-          <div className="window-bar">
-            <span /><span /><span />
-            <b>app.mandapranutri.com.br</b>
-          </div>
-          <div className="dashboard-layout">
-            <aside className="dashboard-sidebar">
-              <strong>manda pra nutri</strong>
-              <span className="is-active">Visão geral</span>
-              <span>Diário alimentar</span>
-              <span>Evolução</span>
-              <i>MPN</i>
-            </aside>
-            <div className="dashboard-main">
-              <div className="dashboard-heading">
-                <div><small>Seu acompanhamento</small><strong>Olá, Ana</strong></div>
-                <span>Esta semana</span>
-              </div>
-              <div className="dashboard-grid">
-                <section className="dashboard-card dashboard-chart">
-                  <small>Evolução semanal</small>
-                  <div className="chart-layout">
-                    <div className="chart-ring"><span>7 dias</span></div>
-                    <div className="chart-bars">
-                      {[48, 72, 58, 84, 66, 91, 76].map((height, index) => (
-                        <i key={height} style={{ "--bar": `${height}%` } as React.CSSProperties}><b /><span>{"DSTQQSS"[index]}</span></i>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-                <section className="dashboard-card dashboard-summary">
-                  <small>Hoje</small>
-                  <strong>Registros do dia</strong>
-                  <div><span>Café da manhã</span><b>registrado</b></div>
-                  <div><span>Almoço</span><b>registrado</b></div>
-                  <div><span>Lanche</span><b>adicionar</b></div>
-                </section>
-                <section className="dashboard-card dashboard-diary">
-                  <div><small>Diário alimentar</small><strong>Últimas refeições</strong></div>
-                  <span>Ver diário completo</span>
-                </section>
-              </div>
-            </div>
+    <section className="hero section-shell" id="topo" aria-labelledby="hero-title">
+      <div className="hero-scene">
+        <TaskBoard counterRef={counterRef} />
+        <div className="hero-copy">
+          <h1 id="hero-title">
+            Agentes de IA para empresas. <em>Feitos sob medida.</em>
+          </h1>
+          <p>
+            A BruLabs é uma startup de software de Florianópolis. Construímos agentes que assumem tarefas repetitivas da operação, ligados às ferramentas que a empresa já usa.
+          </p>
+          <div className="hero-actions">
+            <a className="button" href="#contato">Falar com a BruLabs <ArrowRight size={17} weight="bold" aria-hidden="true" /></a>
+            <a className="hero-link" href="#agentes">Ver um agente trabalhando <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
           </div>
         </div>
+        <p className="hero-count" ref={counterRef} aria-hidden="true" />
       </div>
+    </section>
+  );
+}
 
-      <div className="phone-shell" aria-hidden="true">
-        <div className="phone-screen">
-          <div className="phone-status"><span>9:41</span><span>● ● ●</span></div>
-          <div className="chat-header"><b>mpn</b><div><strong>Manda pra Nutri</strong><small>online</small></div></div>
-          <div className="chat-body">
-            <div className="chat-message chat-message-user">
-              <img src={asset("assets/case/mpn/meal-capture.webp")} alt="" />
-              <span>Meu almoço de hoje</span>
-            </div>
-            <div className="chat-message chat-message-bot">
-              <p>Refeição recebida. Já organizei a análise e o registro no seu diário.</p>
-              <span>Ver detalhes</span>
-            </div>
-          </div>
-          <div className="chat-input"><span>Mensagem</span><b>↑</b></div>
-        </div>
-      </div>
+// The agent scene is drawn on a fixed stage and played as a function of time, in seconds:
+// a voice message becomes two tasks, the agent books one in a modern calendar, a person confirms the other
+// in an old system, and the agent writes back.
+const SCENE = { first: 0.45, ask: 7.95, press: 11, close: 11.18, send: 15.25, still: 17, end: 18 };
+// What the agent answers: with the stock set aside, or when the person refused the write-off.
+const REPLIES = ["Fechado! Entrega na quinta, 10 unidades.", "Marcado pra quinta. O estoque eu já confirmo."];
+const TILE = 38;
+const BARS = 11;
+const barHeights = (() => {
+  const random = seeded(7);
+  return Array.from({ length: BARS * 2 }, () => 0.28 + random() * 0.72);
+})();
 
-      <div className="product-note note-input">foto · áudio · texto</div>
-      <div className="product-note note-output">conversa → histórico</div>
+// Appointments already in the calendar, by cell, each with its colour.
+const calendarEvents: Record<number, string> = { 2: "#cfdcde", 8: "#f0dba6", 15: "#dde2cc", 19: "#f3d3c2", 23: "#cfdcde" };
+
+type Box = { x: number; y: number; w: number; h: number };
+
+// Eased interpolation through timed keyframes [time, ...values]; holds the first and last values outside their range.
+function track(time: number, keys: number[][]) {
+  let index = 0;
+  while (index < keys.length - 2 && time >= keys[index + 1][0]) index += 1;
+  const from = keys[index];
+  const to = keys[index + 1];
+  const progress = span(time, from[0], to[0]);
+  return from.slice(1).map((value, at) => mix(value, to[at + 1], progress));
+}
+
+function OldTitle({ label }: { label: string }) {
+  return (
+    <div className="old-title">
+      {label}
+      <span>
+        <i><svg viewBox="0 0 9 9"><path d="M0 7h6v2H0z" /></svg></i>
+        <i><svg viewBox="0 0 9 9"><path fillRule="evenodd" d="M0 0h9v9H0zM1 2v6h7V2z" /></svg></i>
+        <i><svg viewBox="0 0 9 9"><path d="M0 0h2l2.5 3L7 0h2L5.5 4.5 9 9H7L4.5 6 2 9H0l3.5-4.5z" /></svg></i>
+      </span>
     </div>
   );
 }
 
-function Hero() {
+// A product of our own, shown as a silent recording next to the illustrative scene.
+function RealCase() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const heldRef = useRef(false);
+  const [playing, setPlaying] = useState(false);
+
+  // The recording plays only while it is on screen, so the file is not fetched before the visitor gets there.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const visibility = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) video.pause();
+      else if (!heldRef.current) video.play().catch(() => undefined);
+    }, { threshold: 0.4 });
+    visibility.observe(video);
+    return () => visibility.disconnect();
+  }, []);
+
+  const toggle = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    heldRef.current = !video.paused;
+    if (video.paused) video.play().catch(() => undefined); else video.pause();
+  };
+
   return (
-    <section className="hero section-shell" id="topo">
-      <section className="hero-scene" aria-labelledby="hero-title">
-          <div className="hero-rings" aria-hidden="true" />
-          <div className="hero-grid-lines" aria-hidden="true" />
-          <div className="hero-scene-copy">
-            <h1 id="hero-title">
-              A operação precisa funcionar. <em>A ferramenta vem depois.</em>
-            </h1>
-            <p>
-              Produtos digitais, sistemas internos e automações. A BruLabs começa pelo contexto e só então decide se o caminho é usar, integrar ou construir.
-            </p>
-            <div className="hero-actions">
-              <a className="button button-light" href={tallyUrl({ page: "home", cta: "hero" })}>Conversar sobre o projeto <ArrowMark /></a>
-              <a className="hero-text-link" href="#trabalho">Ver um projeto <ArrowRight size={17} weight="bold" /></a>
-            </div>
-          </div>
-
-          <div className="hero-scene-art" aria-hidden="true">
-            <img className="hero-statue" src={asset("assets/art/hero/statue-modern.webp")} alt="" />
-          </div>
-
-          <span className="hero-corner hero-corner-a" aria-hidden="true" />
-          <span className="hero-corner hero-corner-b" aria-hidden="true" />
-      </section>
-    </section>
-  );
-}
-
-function SelectedWork() {
-  return (
-    <section className="selected-work" id="trabalho" aria-labelledby="mpn-title">
-      <div className="section-shell selected-work-inner">
-        <h2>Um projeto em operação</h2>
-        <article className="selected-project">
-          <div className="selected-project-visual"><MpnProductScene /></div>
-          <div className="selected-project-copy">
-            <div><span>Produto digital · saúde</span><h3 id="mpn-title">Manda Pra Nutri</h3></div>
-            <div>
-              <p>Acompanhamento nutricional pelo WhatsApp, com o histórico organizado num painel para a nutricionista.</p>
-              <p>Saiu de um experimento no ChatGPT, passou pelo Telegram e chegou ao WhatsApp. A BruLabs levou produto, experiência e implementação até o uso.</p>
-              <a href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver o produto <ArrowMark external /></a>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-  );
-}
-
-const capabilities = [
-  {
-    number: "01",
-    title: "Produtos digitais",
-    description: "Plataformas web, produtos com IA e primeiras versões que um cliente, parceiro ou mercado já consegue usar.",
-    examples: "estratégia · protótipo · desenvolvimento · lançamento",
-    image: "assets/solutions/digital-product-cinema-v2.webp",
-    path: "product" as const,
-  },
-  {
-    number: "02",
-    title: "Sistemas internos",
-    description: "Painéis, backoffices e portais para quando planilha e ferramenta genérica já não dão conta do processo.",
-    examples: "operação · dados · permissões · acompanhamento",
-    image: "assets/solutions/custom-system-v2.webp",
-    path: "process" as const,
-  },
-  {
-    number: "03",
-    title: "Integrações e automações",
-    description: "Ligar formulários, planilhas, e-mail, CRM e Microsoft 365 para parar de copiar dado de um lado para o outro.",
-    examples: "integrações · automação · IA aplicada · suporte",
-    image: "assets/solutions/automation-v2.webp",
-    path: "process" as const,
-  },
-];
-
-function ServicePanel({
-  capability,
-  index,
-  onOpen,
-}: {
-  capability: (typeof capabilities)[number];
-  index: number;
-  onOpen: () => void;
-}) {
-  return (
-    <article className={`service-panel service-panel-${index + 1}`} data-openness="0">
-      <button
-        type="button"
-        aria-expanded={false}
-        aria-controls={`service-panel-${index}`}
-        onClick={onOpen}
-      >
-        <h3>{capability.title}</h3>
-        <span>{capability.number}</span>
-      </button>
-      <div className="service-panel-collapse" aria-hidden="true">
-        <div className="service-panel-clip" id={`service-panel-${index}`}>
-          <div className="service-panel-body">
-            <div>
-              <p>{capability.description}</p>
-              <small>{capability.examples}</small>
-              <a
-                href={tallyUrl({ path: capability.path, solution: capability.title, page: "home", cta: "servico" })}
-                tabIndex={-1}
-              >
-                Ver se faz sentido <ArrowMark />
-              </a>
-            </div>
-            <figure><img src={asset(capability.image)} alt="" loading="lazy" /></figure>
-          </div>
-        </div>
+    <article className="real-case">
+      <figure>
+        <video
+          ref={videoRef}
+          src={asset("assets/case/mpn/whatsapp.mp4")}
+          poster={asset("assets/case/mpn/whatsapp.webp")}
+          width={720}
+          height={1280}
+          muted
+          loop
+          playsInline
+          preload="none"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          aria-label="Gravação: uma pessoa fotografa o prato, envia no WhatsApp e recebe a análise da refeição."
+        />
+        <button type="button" onClick={toggle} aria-label={playing ? "Pausar o vídeo" : "Reproduzir o vídeo"}>
+          {playing ? <Pause size={16} weight="fill" aria-hidden="true" /> : <Play size={16} weight="fill" aria-hidden="true" />}
+        </button>
+      </figure>
+      <div>
+        <span>Caso real</span>
+        <h3>Manda Pra Nutri</h3>
+        <p>A pessoa fotografa o prato e manda no WhatsApp. O agente identifica os alimentos, estima calorias e macros e guarda tudo no histórico que a nutricionista acompanha.</p>
+        <a className="text-link" href="https://mandapranutri.com.br/" target="_blank" rel="noreferrer">Ver o produto <ArrowUpRight size={16} weight="bold" aria-hidden="true" /></a>
+        <small>Gravação real, com a espera pela resposta cortada.</small>
       </div>
     </article>
   );
 }
 
-function Capabilities() {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const openServiceRef = useRef<(index: number) => void>(() => undefined);
+function AgentDemo() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef({ time: SCENE.first, paused: false, visitor: false, declined: false, dirty: false });
+  const [paused, setPaused] = useState(false);
+  const [still] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   useEffect(() => {
-    const automaticMotion = window.matchMedia("(min-width: 901px) and (prefers-reduced-motion: no-preference)");
-    let frame = 0;
-    const stage = stageRef.current;
-    if (!stage) return;
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const state = stateRef.current;
+    const find = (selector: string) => scene.querySelector<HTMLElement>(selector) as HTMLElement;
+    const world = find(".scene-world");
+    const audio = find(".chat-audio");
+    const reply = find(".chat-reply");
+    const replyText = find(".chat-reply p");
+    const typed = find(".chat-input b");
+    const send = find(".chat-input i");
+    const desktop = find(".old-desktop");
+    const minus = find(".stock-minus");
+    const dialog = find(".old-dialog");
+    const yes = find("[data-answer='yes']");
+    const no = find("[data-answer='no']");
+    const quantity = find(".stock-quantity");
+    const level = find(".stock-level b");
+    const agent = find(".scene-cursor.is-agent");
+    const human = find(".scene-cursor.is-human");
+    const tiles = Array.from(scene.querySelectorAll<HTMLElement>(".scene-tile"), (tile) => ({
+      tile,
+      bars: Array.from(tile.querySelectorAll<HTMLElement>("i")),
+      marks: Array.from(tile.querySelectorAll<SVGElement>("svg")),
+    }));
 
-    const panels = Array.from(stage.querySelectorAll<HTMLElement>(".service-panel"));
+    let view = { w: 1, h: 1 };
+    let wave: Box = { x: 0, y: 0, w: 0, h: 0 };
+    let targets: Box[] = [];
+    let parking = [0, 0];
+    let camera: number[][] = [];
+    let agentPath: number[][] = [];
+    let humanPath: number[][] = [];
 
-    const applyOpenness = (values: number[]) => {
-      panels.forEach((panel, index) => {
-        const openness = values[index] ?? 0;
-        const isOpen = openness > 0.01;
-        const collapse = panel.querySelector<HTMLElement>(".service-panel-collapse");
-        const body = panel.querySelector<HTMLElement>(".service-panel-body");
-        const button = panel.querySelector<HTMLButtonElement>("button");
-        const link = panel.querySelector<HTMLAnchorElement>(".service-panel-body a");
-        if (!collapse || !body || !button) return;
+    // Positions are measured on the untransformed stage, with the conversation as it is before the answer,
+    // so the layout lives in the CSS alone.
+    const build = () => {
+      for (const element of [world, audio, send, desktop]) element.style.transform = "";
+      reply.style.maxHeight = "0";
+      typed.textContent = "";
+      const origin = world.getBoundingClientRect();
+      const box = (selector: string): Box => {
+        const rect = find(selector).getBoundingClientRect();
+        return { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height };
+      };
+      view = { w: scene.clientWidth, h: scene.clientHeight };
+      const aspect = view.w / view.h;
+      // A shot is [centre x, centre y, width]: the stage area the camera frames. It always holds its whole target.
+      const shot = (target: Box, pad: number, min = 0) => [target.x + target.w / 2, target.y + target.h / 2, Math.max(min, target.w + pad * 2, (target.h + pad * 2) * aspect)];
+      const tip = (target: Box, dx: number, dy: number) => [target.x + target.w / 2 + dx, target.y + target.h / 2 + dy];
+      const device = box(".phone");
+      const calendar = box(".calendar");
+      const monitor = box(".monitor");
+      const answer = box("[data-answer='yes']");
+      const ask = box(".old-dialog");
+      const field = box(".chat-input b");
+      wave = box(".chat-wave");
+      targets = [box(".calendar-grid .is-target"), box(".stock-item")];
+      parking = [calendar.x + calendar.w - 62, calendar.y - 16];
 
-        panel.dataset.openness = String(openness);
-        panel.classList.toggle("is-open", isOpen);
-        collapse.style.gridTemplateRows = `${openness}fr`;
-        body.style.opacity = String(openness);
-        button.setAttribute("aria-expanded", String(isOpen));
-        collapse.setAttribute("aria-hidden", String(!isOpen));
-        if (link) link.tabIndex = openness > 0.9 ? 0 : -1;
-      });
-    };
-
-    const updateFromScroll = () => {
-      frame = 0;
-      if (!automaticMotion.matches) return;
-
-      const activationLine = window.innerHeight * .67;
-      const revealDistance = Math.max(130, window.innerHeight * .18);
-      const next = panels.map((panel) => {
-        const distance = activationLine - panel.getBoundingClientRect().top;
-        return Math.min(1, Math.max(0, distance / revealDistance));
-      });
-      applyOpenness(next);
-    };
-
-    const requestUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateFromScroll);
-    };
-
-    const configureMotion = () => {
-      stage.classList.toggle("is-scroll-driven", automaticMotion.matches);
-      if (automaticMotion.matches) updateFromScroll();
-      else applyOpenness([1, 0, 0]);
-    };
-
-    openServiceRef.current = (index) => {
-      if (automaticMotion.matches) {
-        applyOpenness(capabilities.map((_, itemIndex) => itemIndex <= index ? 1 : 0));
+      // The camera frames one thing at a time: the conversation, the calendar, the old system, the conversation again.
+      const talk = shot({ x: device.x, y: device.y + device.h - 330, w: device.w, h: 330 }, 16);
+      const close = shot(box(".chat-audio"), 40, 230 * aspect);
+      const modern = shot(calendar, 24);
+      const old = shot(monitor, 14);
+      if (still) {
+        // Wide frames show both systems with their finished tasks; narrow ones show the answer.
+        const systems = shot({ x: calendar.x, y: monitor.y, w: monitor.x + monitor.w - calendar.x, h: monitor.h }, 12);
+        const whole = aspect > 1.3 ? systems : talk;
+        camera = [[0, ...whole], [1, ...whole]];
       } else {
-        applyOpenness(capabilities.map((_, itemIndex) => itemIndex === index ? 1 : 0));
+        camera = [[0.9, ...talk], [2.4, ...close], [4.1, ...close], [5.3, ...modern], [6.6, ...modern], [7.6, ...old], [11.6, ...old], [13, ...talk]];
       }
+
+      const onCell = tip(targets[0], 6, 8);
+      const onMinus = tip(box(".stock-minus"), 3, 4);
+      const aside = [ask.x - 30, ask.y + 56];
+      const onField = [field.x + field.w - 30, field.y + field.h - 8];
+      const onSend = tip(box(".chat-input i"), 4, 6);
+      agentPath = [[5.2, calendar.x + calendar.w - 40, -40], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onMinus], [8.05, ...onMinus], [8.6, ...aside], [11.5, ...aside], [12.95, ...onField], [14.95, ...onField], [15.15, ...onSend]];
+      const below = [answer.x + answer.w / 2 + 70, monitor.y + monitor.h + 90];
+      const onYes = tip(answer, 16, 6);
+      humanPath = [[9.8, ...below], [10.75, ...onYes], [11.3, ...onYes], [12.1, ...below]];
     };
 
-    configureMotion();
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
-    automaticMotion.addEventListener("change", configureMotion);
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
-      automaticMotion.removeEventListener("change", configureMotion);
+    const pointer = (element: HTMLElement, time: number, path: number[][], presses: number[], shown: boolean) => {
+      const [x, y] = track(time, path);
+      const since = presses.map((press) => time - press).find((age) => age > -0.09 && age < 0.4);
+      const down = since !== undefined && since < 0.16;
+      element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${down ? 0.84 : 1})`;
+      element.style.opacity = shown ? "1" : "0";
+      const ring = element.firstElementChild as HTMLElement;
+      const age = since !== undefined && since >= 0 ? since / 0.4 : 1;
+      ring.style.transform = `scale(${(0.3 + age * 1.1).toFixed(3)})`;
+      ring.style.opacity = ((1 - age) * 0.8).toFixed(3);
     };
+
+    const render = (time: number) => {
+      const { visitor, declined } = state;
+      const [cx, cy, width] = track(time, camera);
+      const scale = view.w / width;
+      world.style.transform = `translate(${(view.w / 2 - cx * scale).toFixed(2)}px, ${(view.h / 2 - cy * scale).toFixed(2)}px) scale(${scale.toFixed(4)})`;
+      world.style.opacity = Math.min(span(time, 0, 0.35), 1 - span(time, SCENE.end - 0.4, SCENE.end)).toFixed(3);
+
+      // Conversation: the voice message arrives and plays; at the end the agent types an answer and sends it.
+      const arrived = span(time, 0.8, 1.1);
+      audio.style.opacity = arrived.toFixed(3);
+      audio.style.transform = `scale(${mix(0.86, 1, arrived).toFixed(3)})`;
+      const message = REPLIES[declined ? 1 : 0];
+      const sent = time >= SCENE.send;
+      const text = sent ? "" : message.slice(0, Math.round(message.length * Math.min(1, Math.max(0, (time - 13.25) / 1.6))));
+      if (typed.textContent !== text) typed.textContent = text;
+      typed.classList.toggle("is-typing", time >= 13.1 && !sent);
+      send.style.transform = `scale(${time > SCENE.send - 0.08 && time < SCENE.send + 0.14 ? 0.86 : 1})`;
+      if (replyText.textContent !== message) replyText.textContent = message;
+      const answered = span(time, SCENE.send, SCENE.send + 0.3);
+      reply.style.maxHeight = `${(answered * 120).toFixed(1)}px`;
+      reply.style.opacity = answered.toFixed(3);
+
+      // Old system: the monitor switches on as the camera arrives; later its dialog waits for an answer.
+      const on = span(time, 6.9, 7.4);
+      desktop.style.transform = `scaleY(${mix(0.006, 1, on).toFixed(4)})`;
+      desktop.style.opacity = on > 0 ? "1" : "0";
+      desktop.style.filter = on < 1 ? `brightness(${mix(2.6, 1, on).toFixed(2)})` : "";
+      minus.classList.toggle("is-pressed", time > 7.77 && time < 8);
+      dialog.style.visibility = time >= SCENE.ask && time < SCENE.close ? "visible" : "hidden";
+      yes.classList.toggle("is-pressed", time >= SCENE.press && !declined);
+      no.classList.toggle("is-pressed", time >= SCENE.press && declined);
+      const left = declined ? 48 : Math.round(mix(48, 38, span(time, SCENE.close + 0.05, SCENE.close + 0.7)));
+      quantity.textContent = String(left);
+      level.style.width = `${(left / 60) * 100}%`;
+
+      // The voice message bars close up into two tiles, which fly to the day and to the stock item.
+      const formed = span(time, 3, 4);
+      tiles.forEach(({ tile, bars, marks: [icon, check] }, index) => {
+        const target = targets[index];
+        // The second tile parks at the corner of the calendar until the camera leaves for the old system.
+        const parked = index === 0 ? 0 : span(time, 4.65, 5.75);
+        const flight = index === 0 ? span(time, 4.4, 5.5) : span(time, 6.6, 7.5);
+        const lift = Math.max(Math.sin(parked * Math.PI), Math.sin(flight * Math.PI));
+        const half = wave.w / 2;
+        const x = mix(mix(mix(wave.x + index * half, wave.x + half + (index === 0 ? -TILE - 5 : 5), formed), parking[0], parked), target.x + (target.w - TILE) / 2, flight);
+        const y = mix(mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), parking[1], parked), target.y + (target.h - TILE) / 2, flight) - lift * 70;
+        const doneAt = index === 0 ? 6.35 : SCENE.close;
+        const refused = index === 1 && declined;
+        const done = time >= doneAt && !refused;
+        const pop = done ? 1 + 0.22 * (1 - span(time, doneAt, doneAt + 0.3)) : 1;
+        tile.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${(pop * (1 + lift * 0.18)).toFixed(3)})`;
+        tile.style.width = `${mix(half, TILE, formed).toFixed(1)}px`;
+        tile.style.height = `${mix(wave.h, TILE, formed).toFixed(1)}px`;
+        tile.style.borderRadius = `${(formed * 7).toFixed(1)}px`;
+        const solid = (formed ** 3).toFixed(3);
+        tile.style.background = done ? "#e9652e" : `rgb(29 33 31 / ${solid})`;
+        tile.style.boxShadow = `0 0 0 2px rgb(255 250 240 / ${solid}), 0 ${(lift * 14).toFixed(1)}px ${(lift * 20).toFixed(1)}px rgb(0 0 0 / ${(lift * 0.35).toFixed(3)})`;
+        tile.style.opacity = (arrived * (refused ? 1 - span(time, SCENE.close, SCENE.close + 0.4) : 1)).toFixed(3);
+        icon.style.opacity = done ? "0" : span(time, 3.7, 4.05).toFixed(3);
+        check.style.opacity = done ? "1" : "0";
+        bars.forEach((bar, at) => {
+          const order = index * BARS + at;
+          const beat = time > 1.2 && time < 3 ? 1 + 0.16 * Math.sin(time * 11 + order * 1.9) : 1;
+          bar.style.left = `${((at + mix(0.25, 0, formed)) / BARS) * 100}%`;
+          bar.style.width = `${(mix(0.5, 1.05, formed) / BARS) * 100}%`;
+          bar.style.height = `${mix(Math.min(1, barHeights[order] * beat), 1, formed) * 100}%`;
+          bar.style.background = (time - 1.2) / 1.8 > order / (BARS * 2) ? "#1d211f" : "#b9b3a6";
+          bar.style.opacity = (1 - span(time, 3.7, 4)).toFixed(3);
+        });
+      });
+
+      pointer(agent, time, agentPath, [6.35, 7.85, 13.1, SCENE.send], time > 5.2);
+      pointer(human, time, humanPath, [SCENE.press], !visitor && time > 9.8 && time < 12.1);
+    };
+
+    const onResize = () => { build(); render(state.time); };
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(scene);
+    if (still) {
+      state.time = SCENE.still;
+      onResize();
+      return () => resizeObserver.disconnect();
+    }
+
+    let frame = 0;
+    let last = 0;
+    let onScreen = false;
+    let started = false;
+    onResize();
+    // The scene starts the first time a good part of it is on screen, and waits while it is off screen.
+    const visibility = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      if (entry.intersectionRatio >= 0.35) started = true;
+    }, { threshold: [0, 0.35] });
+    visibility.observe(scene);
+    const tick = (now: number) => {
+      frame = window.requestAnimationFrame(tick);
+      const delta = Math.min(0.05, (now - (last || now)) / 1000);
+      last = now;
+      if (!onScreen) return;
+      if (started && !state.paused) {
+        state.time += delta;
+        if (state.time >= SCENE.end) Object.assign(state, { time: 0, visitor: false, declined: false });
+      } else if (!state.dirty) return;
+      state.dirty = false;
+      render(state.time);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(frame); resizeObserver.disconnect(); visibility.disconnect(); };
+  }, [still]);
+
+  // The visitor may answer the dialog; if nobody does, the "Humano" cursor answers yes.
+  const answer = (accepted: boolean) => {
+    const state = stateRef.current;
+    if (state.time < SCENE.ask || state.time >= SCENE.press) return;
+    Object.assign(state, { time: SCENE.press, visitor: true, declined: !accepted, dirty: true });
+  };
+  const replay = () => {
+    Object.assign(stateRef.current, { time: 0, visitor: false, declined: false, paused: false, dirty: true });
+    setPaused(false);
+  };
+  const togglePause = () => {
+    stateRef.current.paused = !paused;
+    setPaused(!paused);
+  };
+
+  return (
+    <section className="demo section-shell" id="agentes" aria-labelledby="demo-title">
+      <div className="section-heading">
+        <span>O que é um agente</span>
+        <h2 id="demo-title">Um software que assume uma tarefa do começo ao fim.</h2>
+        <p>Ele trabalha nas ferramentas que a empresa já tem, novas ou antigas. Aqui, o áudio de um cliente vira horário na agenda online e baixa no estoque de um sistema antigo. Nas ações importantes, quem decide é você.</p>
+      </div>
+      <div className="demo-panel">
+        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário numa agenda online e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa e o agente responde ao cliente.">
+          <div className="scene-world">
+            <div className="phone">
+              <div className="phone-screen">
+                <div className="chat-head"><i /><b /></div>
+                <div className="chat-body">
+                  <div className="chat-bubble chat-old"><b /><b /></div>
+                  <div className="chat-bubble chat-audio">
+                    <span className="chat-play"><Play size={16} weight="fill" /></span>
+                    <span className="chat-wave">{barHeights.map((height, index) => <i key={index} style={{ height: `${height * 100}%` }} />)}</span>
+                  </div>
+                  <div className="chat-bubble chat-reply"><p /><Checks size={16} weight="bold" /></div>
+                </div>
+                <div className="chat-input"><b /><i><svg viewBox="0 0 16 16"><path d="M2.5 2 14 8 2.5 14l2-6z" /></svg></i></div>
+              </div>
+            </div>
+            <div className="calendar">
+              <div className="calendar-bar"><i /><i /><i /><b /></div>
+              <div className="calendar-head"><CalendarBlank size={24} weight="fill" />Agenda<i /></div>
+              <div className="calendar-days">{[..."STQQSSD"].map((day, index) => <span key={index}>{day}</span>)}</div>
+              <div className="calendar-grid">
+                {Array.from({ length: 28 }, (_, index) => <i key={index} className={index === 10 ? "is-target" : calendarEvents[index] && "is-busy"} style={{ color: calendarEvents[index] }} />)}
+              </div>
+            </div>
+            <div className="monitor">
+              <div className="monitor-glass">
+                <div className="old-desktop">
+                  <div className="old-window stock">
+                    <OldTitle label="Estoque" />
+                    <div className="old-menu"><span><u>A</u>rquivo</span><span><u>E</u>ditar</span><span>Aj<u>u</u>da</span></div>
+                    <div className="stock-list">
+                      {[48, 54, 9, 31].map((amount) => (
+                        <div className="stock-row" key={amount}>
+                          <i className="stock-item" />
+                          <b className="stock-name" />
+                          <span className="stock-level"><b style={{ width: `${(amount / 60) * 100}%` }} /></span>
+                          <span className="stock-quantity">{amount}</span>
+                          <i className="old-step stock-minus" />
+                          <i className="old-step is-plus" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="old-status"><span>4 itens</span><span /></div>
+                  </div>
+                  <div className="old-window old-dialog">
+                    <OldTitle label="Estoque" />
+                    <div className="old-dialog-body">
+                      <svg viewBox="0 0 16 16"><path d="M8 1.2 15.3 14.6H.7z" fill="#ffd500" stroke="#000" strokeLinejoin="round" /><path d="M7.2 5.6h1.6v4.6H7.2zm0 5.6h1.6v1.6H7.2z" /></svg>
+                      <Package size={32} weight="fill" />
+                      −10
+                    </div>
+                    <div className="old-dialog-actions">
+                      <div className="old-button is-default" data-answer="yes" onClick={() => answer(true)}>Sim</div>
+                      <div className="old-button" data-answer="no" onClick={() => answer(false)}>Não</div>
+                    </div>
+                  </div>
+                  <div className="old-taskbar">
+                    <span className="old-button"><i />Iniciar</span>
+                    <span>08:12</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {[CalendarBlank, Package].map((Icon, index) => (
+              <div className="scene-tile" key={index}>
+                {Array.from({ length: BARS }, (_, bar) => <i key={bar} />)}
+                <Icon size={22} weight="fill" />
+                <Check size={22} weight="bold" />
+              </div>
+            ))}
+            <span className="scene-cursor is-agent">
+              <i />
+              <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[0]} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+            </span>
+            <span className="scene-cursor is-human">
+              <i />
+              <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill="#1d211f" stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+              <b>Humano</b>
+            </span>
+          </div>
+        </div>
+        <div className="demo-foot">
+          <span>Exemplo ilustrativo</span>
+          {!still && (
+            <div>
+              <button type="button" onClick={togglePause} aria-label={paused ? "Continuar a animação" : "Pausar a animação"}>
+                {paused ? <Play size={16} weight="fill" aria-hidden="true" /> : <Pause size={16} weight="fill" aria-hidden="true" />}
+              </button>
+              <button type="button" onClick={replay}><ArrowClockwise size={16} weight="bold" aria-hidden="true" /> Repetir</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <RealCase />
+      <p className="demo-note">E quando um agente não é a resposta, a gente avisa.</p>
+    </section>
+  );
+}
+
+const steps = [
+  {
+    title: "Escolha da tarefa",
+    description: "Começamos por uma tarefa só, repetitiva e bem definida.",
+    detail: "Uma boa primeira tarefa se repete toda semana, segue regras claras e hoje toma tempo de alguém.",
+  },
+  {
+    title: "Agente sob medida",
+    description: "Construímos ligado às ferramentas que a empresa já usa.",
+    detail: "O agente trabalha dentro do que já existe: e-mail, WhatsApp, planilhas e o sistema de gestão. Ninguém troca de ferramenta.",
+  },
+  {
+    title: "Teste com a equipe",
+    description: "Com casos reais, antes de entrar na rotina.",
+    detail: "Quem faz a tarefa hoje acompanha o agente em casos reais e aponta onde ele erra. Só depois ele entra na rotina.",
+  },
+  {
+    title: "Ajuste em uso",
+    description: "Acompanhamos e corrigimos conforme o agente trabalha.",
+    detail: "Tarefas mudam. Seguimos acompanhando o agente em operação e ajustamos quando a regra muda.",
+  },
+];
+// Text colour that reads on each agent colour, in the same order as AGENT_COLORS.
+const AGENT_TEXT = ["#1d211f", "#f6efdf", "#1d211f", "#f6efdf", "#f6efdf", "#f6efdf"];
+
+function Method() {
+  const [flipped, setFlipped] = useState<number | null>(null);
+
+  return (
+    <section className="method section-shell" id="metodo" aria-labelledby="method-title">
+      <div className="section-heading">
+        <span>Como trabalhamos</span>
+        <h2 id="method-title">Uma tarefa de cada vez.</h2>
+        <p>Clique num cartão para ver mais.</p>
+      </div>
+      <ol className="method-steps">
+        {steps.map((step, index) => {
+          const isFlipped = flipped === index;
+          return (
+            <li key={step.title} className={isFlipped ? "is-flipped" : undefined}>
+              <div className="card-inner">
+                <div className="card-face card-front" inert={isFlipped} onClick={() => setFlipped(index)}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                  <div className="method-agent" aria-hidden="true">
+                    <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[index]} stroke="#fffaf0" strokeWidth="1" strokeLinejoin="round" /></svg>
+                  </div>
+                  <button type="button" className="card-toggle" aria-label={`Ver mais sobre: ${step.title}`}><Plus size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
+                <div
+                  className="card-face card-back"
+                  inert={!isFlipped}
+                  style={{ background: AGENT_COLORS[index], color: AGENT_TEXT[index] }}
+                  onClick={(event) => { if (!(event.target as HTMLElement).closest("a")) setFlipped(null); }}
+                >
+                  <h3>{step.title}</h3>
+                  <p>{step.detail}</p>
+                  <a className="text-link" href="#contato">Falar sobre uma tarefa <ArrowRight size={16} weight="bold" aria-hidden="true" /></a>
+                  <button type="button" className="card-toggle" aria-label="Voltar o cartão"><X size={20} weight="bold" aria-hidden="true" /></button>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function About() {
+  return (
+    <section className="about section-shell" id="sobre" aria-labelledby="about-title">
+      <div className="about-note">
+        <img src={asset("assets/brand/bruno-founder.webp")} alt="Bruno, da BruLabs" width={1099} height={1431} loading="lazy" />
+        <div>
+          <span>Quem faz</span>
+          <h2 id="about-title">Oi, eu sou o Bruno.</h2>
+          <p>
+            Sou engenheiro e fundei a BruLabs em Florianópolis. A empresa é pequena de propósito: quem conversa com você no começo é quem constrói o agente depois.
+          </p>
+          <ul className="about-facts">
+            <li>Engenharia pela UFRGS</li>
+            <li>Especialização em IA</li>
+            <li>MBA pela USP/Esalq</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type Wave = [amplitude: number, cycles: number, phase: number];
+type Hill = { color: string; seconds: number; base: number; waves: Wave[] };
+
+// Height of a hill at x, in the 1440 x 360 space the landscape is drawn in.
+const hillHeight = (hill: Hill, x: number) =>
+  hill.waves.reduce((sum, [amplitude, cycles, phase]) => sum + amplitude * Math.sin((x / 1440) * Math.PI * 2 * cycles + phase), hill.base);
+
+// One period of rolling hills, drawn twice so the layer can loop sideways without a seam.
+function hillPath(hill: Hill) {
+  const points: string[] = [];
+  for (let x = 0; x <= 2880; x += 24) points.push(`${x},${hillHeight(hill, x).toFixed(1)}`);
+  return `M0,360 L${points.join(" L")} L2880,360 Z`;
+}
+
+const hills: Hill[] = [
+  { color: "#f7b48f", seconds: 150, base: 150, waves: [[34, 1, 0.4], [14, 3, 1.9]] },
+  { color: "#f07740", seconds: 110, base: 196, waves: [[40, 2, 2.2], [12, 5, 0.3]] },
+  { color: "#c94e1c", seconds: 80, base: 246, waves: [[30, 1, 3.4], [16, 4, 1.1]] },
+  { color: "#a92f1a", seconds: 56, base: 296, waves: [[22, 3, 0.9], [9, 7, 2.6]] },
+];
+
+// The office scene is laid out in the units of the source drawing (1440 x 987).
+const OFFICE = { width: 1440, height: 987 };
+const MUG = { width: 103, height: 92, home: { x: 394, y: 326 }, floor: { x: 640, y: 890 } };
+const CHAIR = { width: 658, left: 693, away: 90, tucked: -50, grab: { x: 250, y: 520 } };
+const TIDY_SECONDS = 10.5;
+// How much faster than the timeline below the scene actually plays.
+const TIDY_SPEED = 1.7;
+const ease = (t: number) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
+const span = (time: number, from: number, to: number) => ease((time - from) / (to - from));
+const mix = (from: number, to: number, t: number) => from + (to - from) * t;
+
+// Drifting hills, and an office in the corner that one cursor tidies when the visitor arrives.
+function Landscape() {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const pieces = { desk: findMedia(footerFiles, "mesa"), mug: findMedia(footerFiles, "caneca"), chair: findMedia(footerFiles, "cadeira") };
+  const hasOffice = Boolean(pieces.desk && pieces.mug && pieces.chair);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const layers = Array.from(scene.querySelectorAll<SVGPathElement>(".hills path"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const office = scene.querySelector<HTMLElement>(".office");
+    const mug = scene.querySelector<HTMLElement>(".office-mug");
+    const chair = scene.querySelector<HTMLElement>(".office-chair");
+    const hand = scene.querySelector<HTMLElement>(".office-hand");
+    let frame = 0;
+    let onScreen = true;
+    let startedAt: number | null = null;
+
+    // One cursor tidies up, once: mug from the floor to the desk, then the chair pushed in.
+    // t is seconds since the visitor reached the footer; from TIDY_SECONDS on the office stays tidy and the cursor is gone.
+    const tidy = (t: number) => {
+      if (!office || !mug || !chair || !hand) return;
+      const unit = office.clientWidth / OFFICE.width;
+      const mugHome = { x: MUG.home.x + MUG.width / 2, y: MUG.home.y + MUG.height / 2 };
+      const mugFloor = { x: MUG.floor.x + MUG.width / 2, y: MUG.floor.y + MUG.height / 2 };
+      const carry = span(t, 2.3, 4.3);
+      const chairShift = mix(CHAIR.away, CHAIR.tucked, span(t, 6.5, 8.5));
+      const mugAt = { x: mix(mugFloor.x, mugHome.x, carry), y: mix(mugFloor.y, mugHome.y, carry) - Math.sin(carry * Math.PI) * 130 };
+      const mugTurn = mix(-90, 0, span(t, 2.3, 3.6));
+      mug.style.transform = `translate(${((mugAt.x - mugHome.x) * unit).toFixed(1)}px, ${((mugAt.y - mugHome.y) * unit).toFixed(1)}px) rotate(${mugTurn.toFixed(1)}deg)`;
+      chair.style.transform = `translateX(${(chairShift * unit).toFixed(1)}px)`;
+
+      // The cursor waits just past the left edge of the landscape and leaves past the right one.
+      const margin = 60 / unit;
+      const enter = { x: -office.offsetLeft / unit - margin, y: 560 };
+      const leave = { x: ((office.offsetParent?.clientWidth ?? 0) - office.offsetLeft) / unit + margin, y: 240 };
+      const chairGrab = { x: CHAIR.left + CHAIR.grab.x, y: CHAIR.grab.y };
+      let at = enter;
+      if (t < 2.3) { const go = span(t, 0.1, 2.1); at = { x: mix(enter.x, mugFloor.x, go), y: mix(enter.y, mugFloor.y, go) }; }
+      else if (t < 4.6) at = mugAt;
+      else if (t < 6.5) { const go = span(t, 4.6, 6.2); at = { x: mix(mugHome.x, chairGrab.x + CHAIR.away, go), y: mix(mugHome.y, chairGrab.y, go) }; }
+      else if (t < 8.5) at = { x: chairGrab.x + chairShift, y: chairGrab.y };
+      else { const go = span(t, 8.6, 10.4); at = { x: mix(chairGrab.x + CHAIR.tucked, leave.x, go), y: mix(chairGrab.y, leave.y, go) }; }
+      const holding = (t > 2 && t < 4.5) || (t > 6.2 && t < 8.7);
+      hand.style.transform = `translate(${(at.x * unit).toFixed(1)}px, ${(at.y * unit).toFixed(1)}px) scale(${holding ? 0.84 : 1})`;
+      hand.style.visibility = "visible";
+    };
+
+    const drift = (seconds: number) => {
+      layers.forEach((layer, index) => { layer.style.transform = `translateX(${-(((seconds / hills[index].seconds) * 1440) % 1440)}px)`; });
+    };
+
+    if (reduced) {
+      drift(24);
+      tidy(TIDY_SECONDS);
+      const onResize = () => tidy(TIDY_SECONDS);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+
+    tidy(0);
+    const visibility = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+    visibility.observe(scene);
+    // The tidy-up starts the first time most of the office is on screen, and never replays.
+    const arrival = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      arrival.disconnect();
+      startedAt = performance.now();
+    }, { threshold: 0.6 });
+    if (office) arrival.observe(office);
+    const tick = (time: number) => {
+      frame = window.requestAnimationFrame(tick);
+      if (!onScreen) return;
+      drift(time / 1000 + 24);
+      tidy(startedAt === null ? 0 : Math.min(TIDY_SECONDS, ((time - startedAt) / 1000) * TIDY_SPEED));
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(frame); visibility.disconnect(); arrival.disconnect(); };
   }, []);
 
   return (
-    <section className="services-section section-shell" id="servicos" aria-labelledby="services-title">
-      <div className="cuberto-heading">
-        <span>O que fazemos</span>
-        <div><h2 id="services-title">Primeiro o problema. Depois a ferramenta.</h2><p>Antes de propor stack, a gente mapeia a operação, o que já foi tentado e quem usa o processo.</p></div>
-      </div>
-      <div className="service-panels-stage" ref={stageRef}>
-        <div className="service-panels">
-          {capabilities.map((capability, index) => (
-            <ServicePanel
-              key={capability.number}
-              capability={capability}
-              index={index}
-              onOpen={() => openServiceRef.current(index)}
-            />
-          ))}
+    <div className="landscape" ref={sceneRef} aria-hidden="true">
+      <svg className="hills" viewBox="0 0 1440 360" preserveAspectRatio="none">
+        <defs>
+          <filter id="hill-grain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch" result="noise" />
+            <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 .96  0 0 0 0 .88  0 0 0 .5 -.12" />
+            <feComposite operator="in" in2="SourceGraphic" />
+            <feBlend in2="SourceGraphic" mode="soft-light" />
+          </filter>
+        </defs>
+        <g filter="url(#hill-grain)">
+          {hills.map((hill) => <path key={hill.color} d={hillPath(hill)} fill={hill.color} />)}
+        </g>
+      </svg>
+      {hasOffice && (
+        <div className="office">
+          <img className="office-desk" src={pieces.desk} alt="" />
+          <img className="office-chair" src={pieces.chair} alt="" />
+          <img className="office-mug" src={pieces.mug} alt="" />
+          <span className="office-hand">
+            <svg viewBox="-2 -2 18 24"><path d={POINTER_SHAPE} fill={AGENT_COLORS[0]} stroke="#fffaf0" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+          </span>
+        </div>
+      )}
+      <div className="ground" />
+    </div>
+  );
+}
+
+function Closing() {
+  return (
+    <footer className="closing" id="contato" aria-labelledby="contact-title">
+      <div className="section-shell closing-inner">
+        <h2 id="contact-title">Que tarefa você passaria para um agente?</h2>
+        <div className="contact-actions">
+          <a className="button button-dark" href={whatsappUrl} target="_blank" rel="noreferrer">
+            <WhatsappLogo size={20} weight="fill" aria-hidden="true" /> Chamar no WhatsApp
+          </a>
+          <a className="contact-email" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+        </div>
+        <div className="closing-meta">
+          <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
+          <div>
+            <span>Florianópolis, SC</span>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer"><InstagramLogo size={18} weight="fill" aria-hidden="true" /> Instagram</a>
+            <a href={LINKEDIN_URL} target="_blank" rel="noreferrer"><LinkedinLogo size={18} weight="fill" aria-hidden="true" /> LinkedIn</a>
+            <a href={tallyUrl({ page: "home", cta: "contato" })}>Formulário</a>
+            <a href={asset("privacidade/")}>Privacidade</a>
+          </div>
+          <span>© 2026 BruLabs</span>
         </div>
       </div>
-    </section>
-  );
-}
-
-const processSteps = [
-  {
-    number: "01",
-    title: "Entender",
-    subtitle: "O que existe e o que falta",
-    description: "Levantamos a necessidade, o processo atual, quem participa e o que já foi tentado.",
-    image: "assets/art/method/diagnosis.webp",
-  },
-  {
-    number: "02",
-    title: "Escolher",
-    subtitle: "Usar, integrar ou construir",
-    description: "Comparamos ferramenta pronta, integração e desenvolvimento sob medida antes de fechar o caminho.",
-    image: "assets/art/method/direction.webp",
-  },
-  {
-    number: "03",
-    title: "Colocar em uso",
-    subtitle: "Testar e colocar na rotina",
-    description: "Desenvolvemos, testamos e acompanhamos a entrada da solução no dia a dia da equipe.",
-    image: "assets/art/method/construction.webp",
-  },
-];
-
-function Process() {
-  return (
-    <section className="workflow-section" id="processo" aria-labelledby="process-title">
-      <div className="section-shell workflow-inner">
-        <div className="workflow-heading"><h2 id="process-title">Como trabalhamos</h2><p>Três etapas, nesta ordem: entender o contexto, escolher o caminho e colocar em uso.</p></div>
-        <div className="workflow-grid">
-          {processSteps.map((step) => (
-            <article className="workflow-card" key={step.number}>
-              <figure><img src={asset(step.image)} alt="" loading="lazy" /></figure>
-              <div><span>{step.number} · {step.subtitle}</span><h3>{step.title}</h3><p>{step.description}</p></div>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Founder() {
-  return (
-    <section className="about-section section-shell" id="sobre" aria-labelledby="founder-title">
-      <div className="cuberto-heading about-heading"><span>Sobre</span><div><h2 id="founder-title">Quem faz o diagnóstico também implementa.</h2><p>Não tem fila de atendimento no meio. O Bruno acompanha da primeira conversa até o que entra em uso.</p></div></div>
-      <div className="about-grid">
-        <figure className="about-photo"><img src={asset("assets/brand/bruno-founder-paper-composite-v6.webp")} alt="Bruno, fundador da BruLabs" loading="lazy" /></figure>
-        <article className="about-card about-card-main"><span>Fundador</span><h3>Trabalho direto com quem conhece o processo.</h3></article>
-        <article className="about-card"><span>Formação</span><strong>Engenharia · UFRGS<br />Especialização em IA<br />MBA · USP/Esalq</strong></article>
-        <article className="about-card about-card-wide"><span>Como atua</span><strong>Investigar, priorizar, implementar e acompanhar.</strong></article>
-      </div>
-    </section>
-  );
-}
-
-function Training() {
-  return (
-    <section className="training-feature section-shell" id="treinamentos" aria-labelledby="training-title">
-      <a className="training-strip" href={sitePath("treinamentos/")}>
-        <figure><img src={asset("assets/art/training/teacher.webp")} alt="" loading="lazy" /></figure>
-        <div className="training-strip-title">
-          <span>Também fazemos</span>
-          <h2 id="training-title">Treinamentos de IA e automação</h2>
-        </div>
-        <p>Workshop prático, nas ferramentas e situações que a equipe já usa.</p>
-        <span className="training-strip-cta">Ver treinamentos <ArrowMark /></span>
-      </a>
-    </section>
-  );
-}
-
-function FinalCta() {
-  return (
-    <section className="final-cta">
-      <Reveal className="section-shell final-cta-inner">
-        <span>Contato</span>
-        <h2>Se algo na operação está travado, começa por aí.</h2>
-        <a className="button button-dark" href={tallyUrl({ page: "home", cta: "final" })}>
-          Conversar sobre o projeto <ArrowMark />
-        </a>
-      </Reveal>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="footer section-shell">
-      <a href="#topo"><img src={asset("assets/brand/logo-principal.png")} alt="BruLabs" /></a>
-      <div><a href="#trabalho">Trabalho</a><a href="#servicos">Serviços</a><a href={sitePath("privacidade/")}>Privacidade</a></div>
-      <span>© 2026 BruLabs</span>
+      <Landscape />
     </footer>
   );
 }
@@ -469,14 +1074,11 @@ export function App() {
       <Header />
       <main id="conteudo">
         <Hero />
-        <Capabilities />
-        <SelectedWork />
-        <Process />
-        <Founder />
-        <Training />
-        <FinalCta />
+        <AgentDemo />
+        <About />
+        <Method />
       </main>
-      <Footer />
+      <Closing />
     </div>
   );
 }
