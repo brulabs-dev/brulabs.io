@@ -242,7 +242,7 @@ p { color: var(--ink-soft); line-height: 1.6; }
   border-radius: 30px;
   background: var(--cream);
 }
-.about-note > img { border-radius: 22px; filter: grayscale(1) contrast(1.05); }
+.about-note > img { border-radius: 22px; }
 .about h2 { font-size: clamp(2.2rem, 4vw, 3.4rem); }
 .about p { max-width: 34rem; margin-top: 18px; color: var(--ink); font-size: 1.18rem; }
 .about-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }

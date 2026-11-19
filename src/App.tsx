@@ -578,7 +578,7 @@ function About() {
   return (
     <section className="about section-shell" id="sobre" aria-labelledby="about-title">
       <div className="about-note">
-        <img src={asset("assets/brand/bruno.webp")} alt="Bruno, da BruLabs" width={720} height={720} loading="lazy" />
+        <img src={asset("assets/brand/bruno-founder.webp")} alt="Bruno, da BruLabs" width={1099} height={1431} loading="lazy" />
         <div>
           <span>Quem faz</span>
           <h2 id="about-title">Oi, eu sou o Bruno.</h2>
