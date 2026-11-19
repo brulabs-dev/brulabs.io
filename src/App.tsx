@@ -372,8 +372,11 @@ function Hero() {
 }
 
 // The agent scene is drawn on a fixed stage and played as a function of time, in seconds:
-// a voice message becomes two tasks, the agent books one in a modern calendar and a person confirms the other in an old system.
-const SCENE = { width: 1200, height: 600, first: 0.45, ask: 7.95, press: 11, close: 11.18, still: 14, end: 15.8 };
+// a voice message becomes two tasks, the agent books one in a modern calendar, a person confirms the other
+// in an old system, and the agent writes back.
+const SCENE = { first: 0.45, ask: 7.95, press: 11, close: 11.18, send: 15.25, still: 17, end: 18 };
+// What the agent answers: with the stock set aside, or when the person refused the write-off.
+const REPLIES = ["Fechado! Entrega na quinta, 10 unidades.", "Marcado pra quinta. O estoque eu já confirmo."];
 const TILE = 38;
 const BARS = 11;
 const barHeights = (() => {
@@ -480,7 +483,11 @@ function AgentDemo() {
     const world = find(".scene-world");
     const audio = find(".chat-audio");
     const reply = find(".chat-reply");
+    const replyText = find(".chat-reply p");
+    const typed = find(".chat-input b");
+    const send = find(".chat-input i");
     const desktop = find(".old-desktop");
+    const minus = find(".stock-minus");
     const dialog = find(".old-dialog");
     const yes = find("[data-answer='yes']");
     const no = find("[data-answer='no']");
@@ -497,13 +504,17 @@ function AgentDemo() {
     let view = { w: 1, h: 1 };
     let wave: Box = { x: 0, y: 0, w: 0, h: 0 };
     let targets: Box[] = [];
+    let parking = [0, 0];
     let camera: number[][] = [];
     let agentPath: number[][] = [];
     let humanPath: number[][] = [];
 
-    // Positions are measured on the untransformed stage, so the layout lives in the CSS alone.
+    // Positions are measured on the untransformed stage, with the conversation as it is before the answer,
+    // so the layout lives in the CSS alone.
     const build = () => {
-      for (const element of [world, audio, reply, desktop]) element.style.transform = "";
+      for (const element of [world, audio, send, desktop]) element.style.transform = "";
+      reply.style.maxHeight = "0";
+      typed.textContent = "";
       const origin = world.getBoundingClientRect();
       const box = (selector: string): Box => {
         const rect = find(selector).getBoundingClientRect();
@@ -511,42 +522,39 @@ function AgentDemo() {
       };
       view = { w: scene.clientWidth, h: scene.clientHeight };
       const aspect = view.w / view.h;
-      const narrow = aspect < 1.3;
-      // A shot is [centre x, centre y, width]: the stage area the camera frames.
+      // A shot is [centre x, centre y, width]: the stage area the camera frames. It always holds its whole target.
       const shot = (target: Box, pad: number, min = 0) => [target.x + target.w / 2, target.y + target.h / 2, Math.max(min, target.w + pad * 2, (target.h + pad * 2) * aspect)];
       const tip = (target: Box, dx: number, dy: number) => [target.x + target.w / 2 + dx, target.y + target.h / 2 + dy];
+      const device = box(".phone");
+      const calendar = box(".calendar");
       const monitor = box(".monitor");
       const answer = box("[data-answer='yes']");
       const ask = box(".old-dialog");
+      const field = box(".chat-input b");
       wave = box(".chat-wave");
       targets = [box(".calendar-grid .is-target"), box(".stock-item")];
+      parking = [calendar.x + calendar.w - 62, calendar.y - 16];
 
-      const all = [SCENE.width / 2, SCENE.height / 2, Math.max(SCENE.width, SCENE.height * aspect)];
-      const close = shot(box(".chat-audio"), 40, narrow ? 300 : 460);
-      const calendar = box(".calendar");
+      // The camera frames one thing at a time: the conversation, the calendar, the old system, the conversation again.
+      const talk = shot({ x: device.x, y: device.y + device.h - 330, w: device.w, h: 330 }, 16);
+      const close = shot(box(".chat-audio"), 40, 230 * aspect);
+      const modern = shot(calendar, 24);
+      const old = shot(monitor, 14);
       if (still) {
-        // Both systems, with their finished tasks, in one frame.
-        const systems = { x: calendar.x, y: monitor.y, w: monitor.x + monitor.w - calendar.x, h: monitor.h };
-        const whole = narrow ? shot(systems, 12) : all;
+        // Wide frames show both systems with their finished tasks; narrow ones show the answer.
+        const systems = shot({ x: calendar.x, y: monitor.y, w: monitor.x + monitor.w - calendar.x, h: monitor.h }, 12);
+        const whole = aspect > 1.3 ? systems : talk;
         camera = [[0, ...whole], [1, ...whole]];
-      } else if (narrow) {
-        const device = box(".phone");
-        const answered = box(".chat-reply");
-        const phone = shot(device, 16);
-        const first = shot(calendar, 24);
-        const second = shot(monitor, 14);
-        const last = [device.x + device.w / 2, answered.y + answered.h / 2, 300];
-        camera = [[0.9, ...phone], [2.4, ...close], [4.1, ...close], [5.3, ...first], [6.6, ...first], [7.6, ...second], [12, ...second], [13, ...last]];
       } else {
-        camera = [[0.9, ...all], [2.4, ...close], [4.1, ...close], [5.3, ...all]];
+        camera = [[0.9, ...talk], [2.4, ...close], [4.1, ...close], [5.3, ...modern], [6.6, ...modern], [7.6, ...old], [11.6, ...old], [13, ...talk]];
       }
 
-      const enter = [calendar.x + calendar.w - 40, -40];
-      const leave = [monitor.x + monitor.w + 50, monitor.y + monitor.h * 0.6];
       const onCell = tip(targets[0], 6, 8);
-      const onItem = tip(targets[1], 6, 8);
-      const aside = [ask.x - 30, ask.y + 96];
-      agentPath = [[5.2, ...enter], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onItem], [8.05, ...onItem], [8.6, ...aside], [11.35, ...aside], [12.2, ...leave]];
+      const onMinus = tip(box(".stock-minus"), 3, 4);
+      const aside = [ask.x - 30, ask.y + 56];
+      const onField = [field.x + field.w - 30, field.y + field.h - 8];
+      const onSend = tip(box(".chat-input i"), 4, 6);
+      agentPath = [[5.2, calendar.x + calendar.w - 40, -40], [6.2, ...onCell], [6.7, ...onCell], [7.7, ...onMinus], [8.05, ...onMinus], [8.6, ...aside], [11.5, ...aside], [12.95, ...onField], [14.95, ...onField], [15.15, ...onSend]];
       const below = [answer.x + answer.w / 2 + 70, monitor.y + monitor.h + 90];
       const onYes = tip(answer, 16, 6);
       humanPath = [[9.8, ...below], [10.75, ...onYes], [11.3, ...onYes], [12.1, ...below]];
@@ -571,20 +579,27 @@ function AgentDemo() {
       world.style.transform = `translate(${(view.w / 2 - cx * scale).toFixed(2)}px, ${(view.h / 2 - cy * scale).toFixed(2)}px) scale(${scale.toFixed(4)})`;
       world.style.opacity = Math.min(span(time, 0, 0.35), 1 - span(time, SCENE.end - 0.4, SCENE.end)).toFixed(3);
 
-      // Phone: the voice message arrives and plays; the answer comes at the end.
+      // Conversation: the voice message arrives and plays; at the end the agent types an answer and sends it.
       const arrived = span(time, 0.8, 1.1);
       audio.style.opacity = arrived.toFixed(3);
       audio.style.transform = `scale(${mix(0.86, 1, arrived).toFixed(3)})`;
-      const answered = span(time, 12.9, 13.2);
+      const message = REPLIES[declined ? 1 : 0];
+      const sent = time >= SCENE.send;
+      const text = sent ? "" : message.slice(0, Math.round(message.length * Math.min(1, Math.max(0, (time - 13.25) / 1.6))));
+      if (typed.textContent !== text) typed.textContent = text;
+      typed.classList.toggle("is-typing", time >= 13.1 && !sent);
+      send.style.transform = `scale(${time > SCENE.send - 0.08 && time < SCENE.send + 0.14 ? 0.86 : 1})`;
+      if (replyText.textContent !== message) replyText.textContent = message;
+      const answered = span(time, SCENE.send, SCENE.send + 0.3);
+      reply.style.maxHeight = `${(answered * 120).toFixed(1)}px`;
       reply.style.opacity = answered.toFixed(3);
-      reply.style.transform = `translateY(${mix(10, 0, answered).toFixed(1)}px)`;
-      reply.classList.toggle("is-partial", declined);
 
-      // Old system: the monitor switches on and, later, its dialog waits for an answer.
-      const on = span(time, 4.2, 4.8);
+      // Old system: the monitor switches on as the camera arrives; later its dialog waits for an answer.
+      const on = span(time, 6.9, 7.4);
       desktop.style.transform = `scaleY(${mix(0.006, 1, on).toFixed(4)})`;
       desktop.style.opacity = on > 0 ? "1" : "0";
       desktop.style.filter = on < 1 ? `brightness(${mix(2.6, 1, on).toFixed(2)})` : "";
+      minus.classList.toggle("is-pressed", time > 7.77 && time < 8);
       dialog.style.visibility = time >= SCENE.ask && time < SCENE.close ? "visible" : "hidden";
       yes.classList.toggle("is-pressed", time >= SCENE.press && !declined);
       no.classList.toggle("is-pressed", time >= SCENE.press && declined);
@@ -596,12 +611,13 @@ function AgentDemo() {
       const formed = span(time, 3, 4);
       tiles.forEach(({ tile, bars, marks: [icon, check] }, index) => {
         const target = targets[index];
-        const flight = span(time, 4.4 + index * 0.25, 5.5 + index * 0.25);
+        // The second tile parks at the corner of the calendar until the camera leaves for the old system.
+        const parked = index === 0 ? 0 : span(time, 4.65, 5.75);
+        const flight = index === 0 ? span(time, 4.4, 5.5) : span(time, 6.6, 7.5);
+        const lift = Math.max(Math.sin(parked * Math.PI), Math.sin(flight * Math.PI));
         const half = wave.w / 2;
-        const x = mix(mix(wave.x + index * half, wave.x + half + (index === 0 ? -TILE - 5 : 5), formed), target.x + (target.w - TILE) / 2, flight);
-        const lift = Math.sin(flight * Math.PI);
-        // The second tile goes the long way, over the calendar.
-        const y = mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), target.y + (target.h - TILE) / 2, flight) - lift * (index === 0 ? 70 : 125);
+        const x = mix(mix(mix(wave.x + index * half, wave.x + half + (index === 0 ? -TILE - 5 : 5), formed), parking[0], parked), target.x + (target.w - TILE) / 2, flight);
+        const y = mix(mix(mix(wave.y, wave.y + (wave.h - TILE) / 2, formed), parking[1], parked), target.y + (target.h - TILE) / 2, flight) - lift * 70;
         const doneAt = index === 0 ? 6.35 : SCENE.close;
         const refused = index === 1 && declined;
         const done = time >= doneAt && !refused;
@@ -627,7 +643,7 @@ function AgentDemo() {
         });
       });
 
-      pointer(agent, time, agentPath, [6.35, 7.85], time > 5.2 && time < 12.2);
+      pointer(agent, time, agentPath, [6.35, 7.85, 13.1, SCENE.send], time > 5.2);
       pointer(human, time, humanPath, [SCENE.press], !visitor && time > 9.8 && time < 12.1);
     };
 
@@ -690,7 +706,7 @@ function AgentDemo() {
         <p>Ele trabalha nas ferramentas que a empresa já tem, novas ou antigas. Aqui, o áudio de um cliente vira horário na agenda online e baixa no estoque de um sistema antigo. Nas ações importantes, quem decide é você.</p>
       </div>
       <div className="demo-panel">
-        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário numa agenda online e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa.">
+        <div className="scene" ref={sceneRef} role="img" aria-label="Animação: o áudio de um cliente vira um horário numa agenda online e uma baixa no estoque de um sistema antigo. Uma pessoa confirma a baixa e o agente responde ao cliente.">
           <div className="scene-world">
             <div className="phone">
               <div className="phone-screen">
@@ -701,13 +717,9 @@ function AgentDemo() {
                     <span className="chat-play"><Play size={16} weight="fill" /></span>
                     <span className="chat-wave">{barHeights.map((height, index) => <i key={index} style={{ height: `${height * 100}%` }} />)}</span>
                   </div>
-                  <div className="chat-bubble chat-reply">
-                    <span><CalendarBlank size={24} weight="fill" /><Check size={18} weight="bold" /></span>
-                    <span><Package size={24} weight="fill" /><Check size={18} weight="bold" /></span>
-                    <Checks size={17} weight="bold" />
-                  </div>
+                  <div className="chat-bubble chat-reply"><p /><Checks size={16} weight="bold" /></div>
                 </div>
-                <div className="chat-input"><b /><i /></div>
+                <div className="chat-input"><b /><i><svg viewBox="0 0 16 16"><path d="M2.5 2 14 8 2.5 14l2-6z" /></svg></i></div>
               </div>
             </div>
             <div className="calendar">
@@ -723,6 +735,7 @@ function AgentDemo() {
                 <div className="old-desktop">
                   <div className="old-window stock">
                     <OldTitle label="Estoque" />
+                    <div className="old-menu"><span><u>A</u>rquivo</span><span><u>E</u>ditar</span><span>Aj<u>u</u>da</span></div>
                     <div className="stock-list">
                       {[48, 54, 9, 31].map((amount) => (
                         <div className="stock-row" key={amount}>
@@ -730,9 +743,12 @@ function AgentDemo() {
                           <b className="stock-name" />
                           <span className="stock-level"><b style={{ width: `${(amount / 60) * 100}%` }} /></span>
                           <span className="stock-quantity">{amount}</span>
+                          <i className="old-step stock-minus" />
+                          <i className="old-step is-plus" />
                         </div>
                       ))}
                     </div>
+                    <div className="old-status"><span>4 itens</span><span /></div>
                   </div>
                   <div className="old-window old-dialog">
                     <OldTitle label="Estoque" />
